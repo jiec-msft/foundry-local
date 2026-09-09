@@ -9,6 +9,7 @@ import tempfile
 import unittest
 
 from integration import measured_sample, require_cleanup, unknown, verify_model
+from model_inventory import METADATA_FILES, METADATA_SHA, validate_target_schema
 from scorer import score_measurement
 from test_scorer import synthetic_manifest, synthetic_measurement
 
@@ -48,12 +49,14 @@ class IntegrationContractTests(unittest.TestCase):
             cache = root / "model"
             cache.mkdir()
             contents = {"genai_config.json": b"{}", "inference_model.json": b'{\r\n  "unit": true\r\n}'}
+            contents.update({f"unit-{i:02}.bin": b"unit" for i in range(14)})
             files = []
             for name, data in contents.items():
                 (cache / name).write_bytes(data)
                 files.append({"name": name, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
             manifest = "".join(f"{item['name']}\t{item['bytes']}\t{item['sha256']}\n" for item in files)
-            lock = {"files": files, "manifestSha256": hashlib.sha256(manifest.encode()).hexdigest()}
+            lock = {"files": files, "manifestSha256": hashlib.sha256(manifest.encode()).hexdigest(),
+                    "installedBytes": sum(map(len, contents.values()))}
             evidence = root / "model-verification.json"
             self.assertEqual(sum(map(len, contents.values())), verify_model(cache, lock, evidence))
             self.assertEqual("matched", json.loads(evidence.read_text())["status"])
@@ -87,6 +90,33 @@ class IntegrationContractTests(unittest.TestCase):
         measured["resources"]["model_download_bytes"]["value"] = 793344452
         with self.assertRaises(ValueError):
             score_measurement(synthetic_manifest(), measured)
+
+    def test_v3_metadata_provenance_matches_actual_model_target_and_totals(self):
+        measured = version_two()
+        schema = json.loads((Path(__file__).resolve().parent / "measurement.schema.json").read_text())
+        validate_target_schema(measured, schema)
+        measured["schema_version"] = 3
+        measured["sdk"]["metadata_git_sha"] = METADATA_SHA
+        inventory = {
+            "native_rid": "win-x64", "manifest_sha256": measured["model"]["sha256"],
+            "installed_bytes": measured["resources"]["model_install_bytes"],
+            "files_sha256": {name: "d" * 64 for name in METADATA_FILES},
+        }
+        measured["provenance"]["model_inventory"] = inventory
+        validate_target_schema(measured, schema)
+        report = score_measurement(synthetic_manifest(), measured)
+        self.assertEqual(METADATA_SHA, report["measurement_raw"]["sdk"]["metadata_git_sha"])
+        for key, value in (("native_rid", "windows-x64"), ("native_rid", "linux-x64"),
+                           ("manifest_sha256", "f" * 64), ("installed_bytes", 201), ("files_sha256", {})):
+            changed = copy.deepcopy(measured)
+            changed["provenance"]["model_inventory"][key] = value
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                score_measurement(synthetic_manifest(), changed)
+        del measured["sdk"]["metadata_git_sha"]
+        with self.assertRaises(ValueError):
+            score_measurement(synthetic_manifest(), measured)
+        with self.assertRaisesRegex(ValueError, "JSON Schema"):
+            validate_target_schema(measured, schema)
 
     def test_result_does_not_imply_cleanup(self):
         run = {"command": "unit", "events": [{"event": "result", "processChildren": 0}]}

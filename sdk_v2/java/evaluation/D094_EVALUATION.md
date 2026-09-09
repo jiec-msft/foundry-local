@@ -309,3 +309,30 @@ single-lane diagnostics**. No more dispatches are authorized. The local observer
 ran no Java/native/build/model/dependency work; its bounded macOS watcher exited
 after discovering completion, leaving no active owned process. Prior Windows
 native smoke and all preceding failure artifacts remain separate and unchanged.
+
+## Offline consumer of reviewed metadata38bb
+
+The exact seven-file external SDK metadata commit
+`38bbca7f4943687cd90d4aecc365424bb914957e` was scope-reviewed and merged without
+conflicts in merge commit `39ce111a25c51a3790b75477d6324ba278e5dd85`. Its SDK
+contract files were not edited. All binary-producing source and the legacy
+model lock remain at the qualified d094 tuple.
+
+The evaluator now independently pins the metadata revision, validates its actual
+schema and invokes its selector from immutable Git blob bytes. It uses verified
+native RIDs, checks every raw file plus complete selected manifest/installed
+bytes, and emits version3 metadata provenance without changing historical
+measurements. The existing source drift, artifact, architecture, runtime,
+JVM, licensing, cleanup and budget guards remain in force.
+
+At38bb, both Windows RIDs and Linux x64 pass metadata selection; Linux ARM64 and
+macOS ARM64 are still explicitly unobserved and rejected. Later diagnostic
+evidence above is not permission to edit or promote the sidecar. Preparation
+rejects those targets before downloads; integration rejects before native CLI
+inference. Synthetic offline cases do not constitute new native evidence.
+
+No Java, Maven, native inference, model/dependency download or CI dispatch ran in
+this consumer continuation. Checked-in dispatch authorization is false.
+The next dependency is the coordinator's final reviewed metadata revision,
+followed by separately authorized qualification. The remaining full-matrix
+budget is one; none of the three diagnostics should be duplicated.

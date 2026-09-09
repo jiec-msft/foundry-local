@@ -69,6 +69,19 @@ class BindingTests(unittest.TestCase):
                 main()
             launch.assert_not_called()
 
+    def test_metadata_lock_drift_blocks_integration_before_launch(self):
+        command = [
+            str(ROOT / "ci.py"), "integration", "--target", "windows-x64", "--java", "not-java",
+            "--jar", "not-jar", "--runtime-dir", "not-runtime", "--cache-dir", "not-cache",
+            "--output", str(ROOT / "build" / "TestResults" / "must-not-run"),
+        ]
+        with patch.object(sys, "argv", command), patch("ci.json.loads", return_value={
+            "source_pin_refresh_required": False, "metadata_git_sha": "f" * 40
+        }), patch("ci.subprocess.call") as launch:
+            with self.assertRaisesRegex(ValueError, "Metadata SHA"):
+                main()
+            launch.assert_not_called()
+
     def test_active_artifact_pins_are_consistent(self):
         contract = json.loads((ROOT / "sdk-contract.json").read_text())
         lock = json.loads((ROOT / "ci-lock.json").read_text())

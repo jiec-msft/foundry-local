@@ -15,12 +15,12 @@ import time
 import zipfile
 from pathlib import Path
 
-from platform_checks import assert_identities, host_identity, jvm_identity, native_identity
+from model_inventory import METADATA_SHA, SDK_SHA, load_model_metadata
+from platform_checks import assert_identities, host_identity, jvm_identity, native_identity, native_rid
 from scorer import load_json, score_measurement
 
 ROOT = Path(__file__).resolve().parent
 SDK = ROOT.parent
-SDK_SHA = "d0946a0764d9cfa4b3d684940d6d5c66165427b8"
 JAR_SHA = "bf644d3127afff912683731094821a8f6a751f003c284a9c15ddceaecebe0863"
 JAR_BYTES = 64000
 JNA_SHA = "b3a9408e7c51e08ef0e3bfcc08f443f6ec0f6191ba8cd7c18d53d2b22e5bdbc0"
@@ -42,7 +42,9 @@ def unknown(reason):
     return {"value": None, "reason": reason}
 
 
-def verify_model(cache, lock, evidence_path=None):
+def verify_model(cache, lock, evidence_path=None, metadata_sha=None):
+    if len(lock["files"]) != 16:
+        raise ValueError("Expected the complete sixteen-file model inventory")
     candidates = [path.parent for path in cache.rglob("genai_config.json")]
     matches = []
     for directory in candidates:
@@ -64,12 +66,18 @@ def verify_model(cache, lock, evidence_path=None):
         actual_lines.append(f"{item['name']}\t{actual_bytes}\t{actual_sha256}\n")
     mismatches = [item for item in files if not item["matched"]]
     actual_manifest = hashlib.sha256("".join(actual_lines).encode()).hexdigest()
+    actual_total = sum(item["actual_bytes"] for item in files)
     if evidence_path is not None:
-        save(evidence_path, {
-            "status": "mismatch" if mismatches or actual_manifest != lock["manifestSha256"] else "matched",
+        evidence = {
+            "status": "mismatch" if (mismatches or actual_manifest != lock["manifestSha256"]
+                                    or actual_total != lock["installedBytes"]) else "matched",
             "expected_manifest_sha256": lock["manifestSha256"], "actual_manifest_sha256": actual_manifest,
+            "expected_installed_bytes": lock["installedBytes"], "actual_installed_bytes": actual_total,
             "files": files,
-        })
+        }
+        if metadata_sha is not None:
+            evidence.update(metadata_git_sha=metadata_sha, inventory_target=lock["inventoryTarget"])
+        save(evidence_path, evidence)
     if mismatches:
         item = mismatches[0]
         raise ValueError(
@@ -79,7 +87,9 @@ def verify_model(cache, lock, evidence_path=None):
         )
     if hashlib.sha256("".join(lines).encode()).hexdigest() != lock["manifestSha256"]:
         raise ValueError("Model manifest hash mismatch")
-    return sum(item["bytes"] for item in lock["files"])
+    if actual_manifest != lock["manifestSha256"] or actual_total != lock["installedBytes"]:
+        raise ValueError("Actual model manifest or installed byte total differs from selected target")
+    return actual_total
 
 
 def verify_artifacts(jar, runtime, target, java):
@@ -92,7 +102,7 @@ def verify_artifacts(jar, runtime, target, java):
         if versions != {61}:
             raise ValueError(f"SDK must contain Java 17 bytecode only, got {versions}")
     expected_os, expected_arch = target.rsplit("-", 1)
-    rid = {"windows": "win", "linux": "linux", "macos": "osx"}[expected_os] + "-" + expected_arch
+    rid = native_rid(expected_os, expected_arch)
     identities, hashes = [], {}
     for line in (NATIVE_LOCK / "native-lock.properties").read_text().splitlines():
         if not line.startswith(rid + "."):
@@ -272,14 +282,16 @@ def main():
     started_utc = datetime.now(timezone.utc).isoformat()
     deadline = started + args.timeout_seconds
     save(args.output / "run-summary.json", {
-        "sdk_source_sha": SDK_SHA, "sdk_jar_sha256": JAR_SHA, "started_utc": started_utc,
+        "sdk_source_sha": SDK_SHA, "metadata_git_sha": METADATA_SHA,
+        "sdk_jar_sha256": JAR_SHA, "started_utc": started_utc,
         "finished_utc": None, "outcome": "running",
     })
     runs = []
     try:
         manifest = load_json(ROOT / "manifest.json")
-        model_lock = load_json(SDK / "model-lock.json")
+        metadata = load_model_metadata(load_json(ROOT / "sdk-contract.json"))
         environment, rid, natives = verify_artifacts(args.jar, args.runtime_dir, args.target, args.java)
+        model_lock = metadata.select(rid)
         for sample in manifest["samples"]:
             if sha256(ROOT / sample["wav_path"]) != sample["wav_sha256"]:
                 raise ValueError(f"Fixture hash mismatch: {sample['id']}")
@@ -311,7 +323,7 @@ def main():
             prepared = invoke("prepare", "prepare", ["--explicit-download", "--accept-model-license"])
             if not event_once(prepared, "prepared")["cached"]:
                 raise ValueError("Explicit preparation did not produce a cached model")
-        installed = verify_model(args.cache_dir, model_lock, args.output / "model-verification.json")
+        installed = verify_model(args.cache_dir, model_lock, args.output / "model-verification.json", METADATA_SHA)
         batch, paced = [], []
         for sample in manifest["samples"]:
             wav = str(ROOT / sample["wav_path"])
@@ -322,7 +334,8 @@ def main():
                                  "--chunk-ms", "20", "--cancel-after-ms", "1200"]), cancelled=True)
         peaks = [run["peak_rss_bytes"] for run in runs if run["peak_rss_bytes"] is not None]
         measurement = {
-            "schema_version": 2, "fixture_set_id": manifest["fixture_set_id"], "sdk": {"git_sha": SDK_SHA},
+            "schema_version": 3, "fixture_set_id": manifest["fixture_set_id"],
+            "sdk": {"git_sha": SDK_SHA, "metadata_git_sha": METADATA_SHA},
             "environment": environment,
             "runtime": {"version": "2.0.1", "sha256": load_json(NATIVE_LOCK / "runtime-lock.json")["packages"][0]["sha256"]},
             "model": {"id": model_lock["id"], "version": str(model_lock["version"]), "sha256": model_lock["manifestSha256"]},
@@ -347,6 +360,7 @@ def main():
             "batch_samples": batch,
             "cancellation": cancellation,
             "provenance": {"sdk_jar_sha256": JAR_SHA, "jna_sha256": JNA_SHA, "native_sha256": natives,
+                           "model_inventory": metadata.provenance(model_lock, installed),
                            "timing_origin": "Each result.timing is request-local monotonic; never mixed with CLI elapsedMillis",
                            "coverage": "10 batch WAV, 10 paced WAV/PCM, one early cancellation; native TOKEN events are deltas"},
         }
@@ -360,7 +374,8 @@ def main():
         save(args.output / "partial.json", {"status": "completed", "completed_commands": [r["command"] for r in runs],
                                           "active_processes": [], "compute_slot": "RELEASED"})
         save(args.output / "run-summary.json", {
-            "sdk_source_sha": SDK_SHA, "sdk_jar_sha256": JAR_SHA, "started_utc": started_utc,
+            "sdk_source_sha": SDK_SHA, "metadata_git_sha": METADATA_SHA,
+            "sdk_jar_sha256": JAR_SHA, "started_utc": started_utc,
             "finished_utc": datetime.now(timezone.utc).isoformat(), "outcome": "completed",
             "wall_seconds": time.monotonic() - started, "process_count": len(runs), "active_processes": [],
         })
@@ -370,7 +385,8 @@ def main():
                                           "completed_commands": [run["command"] for run in runs],
                                           "active_processes": [], "compute_slot": "RELEASED"})
         save(args.output / "run-summary.json", {
-            "sdk_source_sha": SDK_SHA, "sdk_jar_sha256": JAR_SHA, "started_utc": started_utc,
+            "sdk_source_sha": SDK_SHA, "metadata_git_sha": METADATA_SHA,
+            "sdk_jar_sha256": JAR_SHA, "started_utc": started_utc,
             "finished_utc": datetime.now(timezone.utc).isoformat(), "outcome": "failed",
             "wall_seconds": time.monotonic() - started, "process_count": len(runs), "active_processes": [],
         })

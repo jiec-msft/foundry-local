@@ -43,6 +43,9 @@ def stage_failure(source, destination):
             key: verification[key]
             for key in ("status", "expected_manifest_sha256", "actual_manifest_sha256")
         }
+        for key in ("metadata_git_sha", "inventory_target", "expected_installed_bytes", "actual_installed_bytes"):
+            if key in verification:
+                failure["model_verification"][key] = verification[key]
         failure["model_verification"]["files"] = [
             {key: item[key] for key in (
                 "name", "expected_bytes", "actual_bytes", "expected_sha256", "actual_sha256", "matched"

@@ -12,6 +12,7 @@ from collections import Counter
 from pathlib import Path
 
 from ci import previous_full_count, validate_dispatch
+from model_inventory import METADATA_SHA
 from platform_checks import assert_identities, assert_supported, native_identity, normalize_arch
 from prepare_fixtures import flac_streaminfo
 from stage_artifacts import stage, stage_failure
@@ -139,8 +140,11 @@ class GateTests(unittest.TestCase):
 
     def test_checked_in_readiness_lock_is_coherent(self):
         sdk_sha = "d0946a0764d9cfa4b3d684940d6d5c66165427b8"
-        for gate in ("enabled", "dispatch_authorized", "integration_adapter_ready", "dependency_license_review_complete"):
+        for gate in ("enabled", "integration_adapter_ready", "dependency_license_review_complete"):
             self.assertIs(self.lock[gate], True)
+        self.assertIs(self.lock["dispatch_authorized"], False)
+        self.assertEqual(METADATA_SHA, self.lock["metadata_git_sha"])
+        self.assertEqual(METADATA_SHA, self.contract["metadata_git_sha"])
         self.assertIs(self.lock["source_pin_refresh_required"], False)
         self.assertEqual(sdk_sha, self.contract["sdk_git_sha"])
         self.assertEqual(sdk_sha, self.lock["sdk_git_sha"])
@@ -155,7 +159,8 @@ class GateTests(unittest.TestCase):
         self.assertEqual({target["id"] for target in self.contract["supported_targets"]},
                          set(self.lock["ci_lane_status"]))
         self.assertEqual({"not_run"}, set(self.lock["ci_lane_status"].values()))
-        self.assertEqual(5, len(validate_dispatch(self.lock, self.contract, {**self.context, "sdk_sha": sdk_sha}, 0)))
+        with self.assertRaisesRegex(ValueError, "BLOCKED"):
+            validate_dispatch(self.lock, self.contract, {**self.context, "sdk_sha": sdk_sha}, 0)
         workflows = ROOT.parents[2] / ".github" / "workflows"
         self.assertEqual(["java-sdk-evaluation.yml"], sorted(p.name for p in workflows.glob("java-sdk*.yml")))
 
@@ -177,6 +182,15 @@ class GateTests(unittest.TestCase):
             validate_dispatch(self.lock, self.contract, self.context, 0)
         del self.lock["source_pin_refresh_required"]
         with self.assertRaisesRegex(ValueError, "source-pin refresh"):
+            validate_dispatch(self.lock, self.contract, self.context, 0)
+
+    def test_separate_metadata_pin_and_exact_native_rid_are_required(self):
+        self.ready_synthetic_unit_lock()
+        with self.assertRaisesRegex(ValueError, "Metadata SHA"):
+            validate_dispatch({**self.lock, "metadata_git_sha": "f" * 40},
+                              self.contract, self.context, 0)
+        self.contract["supported_targets"][0]["rid"] = "windows-x64"
+        with self.assertRaisesRegex(ValueError, "native RID"):
             validate_dispatch(self.lock, self.contract, self.context, 0)
 
     def test_all_five_standard_targets_only(self):
@@ -266,6 +280,8 @@ class ArtifactTests(unittest.TestCase):
     def test_failure_retains_only_model_integrity_metadata(self):
         metadata = {
             "status": "mismatch", "expected_manifest_sha256": "a" * 64, "actual_manifest_sha256": "b" * 64,
+            "metadata_git_sha": METADATA_SHA, "inventory_target": "linux-x64",
+            "expected_installed_bytes": 90, "actual_installed_bytes": 87,
             "raw_error": "C:\\Users\\example\\model",
             "files": [{
                 "name": "inference_model.json", "expected_bytes": 90, "actual_bytes": 87,
@@ -280,6 +296,9 @@ class ArtifactTests(unittest.TestCase):
         self.assertEqual("incomplete", failure["status"])
         recorded = failure["model_verification"]
         self.assertEqual("d" * 64, recorded["files"][0]["actual_sha256"])
+        self.assertEqual(METADATA_SHA, recorded["metadata_git_sha"])
+        self.assertEqual("linux-x64", recorded["inventory_target"])
+        self.assertEqual(87, recorded["actual_installed_bytes"])
         self.assertNotIn("raw_error", recorded)
         self.assertNotIn("contents", recorded["files"][0])
         metadata["files"][0]["name"] = "C:\\Users\\example\\model"

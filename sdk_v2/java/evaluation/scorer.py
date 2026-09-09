@@ -18,7 +18,7 @@ import re
 import unicodedata
 from pathlib import Path
 
-from platform_checks import assert_supported
+from platform_checks import assert_supported, native_rid
 
 
 NORMALIZATION_VERSION = "nfkc-casefold-internal-apostrophe-v1"
@@ -111,7 +111,7 @@ def number(value, path, positive=False, integer=False):
 
 
 def observed_number(value, path, version, **constraints):
-    if version == 2 and isinstance(value, dict):
+    if version in (2, 3) and isinstance(value, dict):
         object_fields(value, ("value", "reason"), path)
         if value["value"] is not None:
             raise ValueError(f"{path}: unknown observation value must be null")
@@ -151,17 +151,19 @@ def manifest_samples(manifest):
 def validate_measurement(manifest, measurement, sample_field="samples"):
     expected = manifest_samples(manifest)
     version = measurement.get("schema_version") if isinstance(measurement, dict) else None
-    additional = ("batch_samples", "cancellation", "provenance") if version == 2 else ()
+    additional = ("batch_samples", "cancellation", "provenance") if version in (2, 3) else ()
     object_fields(measurement, (
         "schema_version", "fixture_set_id", "sdk", "environment", "runtime", "model",
         "readiness", "resources", "lifecycle", "samples",
     ) + additional, "measurement")
-    if type(version) is not int or version not in (1, 2):
-        raise ValueError("Measurement schema_version must be 1 or 2")
+    if type(version) is not int or version not in (1, 2, 3):
+        raise ValueError("Measurement schema_version must be 1, 2 or 3")
     if measurement["fixture_set_id"] != manifest["fixture_set_id"]:
         raise ValueError("Measurement fixture_set_id differs from manifest")
-    object_fields(measurement["sdk"], ("git_sha",), "sdk")
+    object_fields(measurement["sdk"], ("git_sha",) + (("metadata_git_sha",) if version == 3 else ()), "sdk")
     hash_value(measurement["sdk"]["git_sha"], 40, "sdk.git_sha")
+    if version == 3:
+        hash_value(measurement["sdk"]["metadata_git_sha"], 40, "sdk.metadata_git_sha")
     environment = measurement["environment"]
     object_fields(environment, ("os", "host_arch", "jvm_arch", "native_arch", "jdk_version", "jdk_vendor"), "environment")
     for key, value in environment.items():
@@ -180,11 +182,11 @@ def validate_measurement(manifest, measurement, sample_field="samples"):
             if field != "sha256":
                 text(measurement[name][field], f"{name}.{field}")
     readiness = measurement["readiness"]
-    object_fields(readiness, ("status", "elapsed_ms", "cold_start") + (("model_load_ms",) if version == 2 else ()), "readiness")
+    object_fields(readiness, ("status", "elapsed_ms", "cold_start") + (("model_load_ms",) if version >= 2 else ()), "readiness")
     if readiness["status"] != "ready" or type(readiness["cold_start"]) is not bool:
         raise ValueError("Readiness requires ready status and explicit boolean cold_start")
     observed_number(readiness["elapsed_ms"], "readiness.elapsed_ms", version)
-    if version == 2:
+    if version >= 2:
         if not isinstance(readiness["model_load_ms"], list) or not readiness["model_load_ms"]:
             raise ValueError("Observed model-load durations are required")
         for duration in readiness["model_load_ms"]:
@@ -193,7 +195,7 @@ def validate_measurement(manifest, measurement, sample_field="samples"):
     object_fields(resources, (
         "peak_rss_bytes", "rss_method", "runtime_download_bytes", "model_download_bytes",
         "runtime_install_bytes", "model_install_bytes",
-    ) + (("artifact_download_bytes", "sdk_artifact_bytes") if version == 2 else ()), "resources")
+    ) + (("artifact_download_bytes", "sdk_artifact_bytes") if version >= 2 else ()), "resources")
     text(resources["rss_method"], "resources.rss_method")
     for key in resources:
         if key != "rss_method":
@@ -203,7 +205,7 @@ def validate_measurement(manifest, measurement, sample_field="samples"):
     object_fields(measurement["lifecycle"], ("native_loaded", "cancel_verified", "cleanup_verified"), "lifecycle")
     if any(value is not True for value in measurement["lifecycle"].values()):
         raise ValueError("Actual native load, cancellation and cleanup evidence are all required")
-    if version == 2:
+    if version >= 2:
         cancellation = measurement["cancellation"]
         object_fields(cancellation, ("verified", "cancellation_requested_ms", "acknowledged_ms",
                                      "acknowledgment_latency_ms", "natural_input_closed_ms",
@@ -218,7 +220,8 @@ def validate_measurement(manifest, measurement, sample_field="samples"):
                             cancellation["acknowledged_ms"] - cancellation["cancellation_requested_ms"], abs_tol=0.001):
             raise ValueError("Cancellation acknowledgment latency differs from observed timestamps")
         provenance = measurement["provenance"]
-        object_fields(provenance, ("sdk_jar_sha256", "jna_sha256", "native_sha256", "timing_origin", "coverage"), "provenance")
+        object_fields(provenance, ("sdk_jar_sha256", "jna_sha256", "native_sha256", "timing_origin", "coverage")
+                      + (("model_inventory",) if version == 3 else ()), "provenance")
         for key in ("sdk_jar_sha256", "jna_sha256"):
             hash_value(provenance[key], 64, key)
         if not isinstance(provenance["native_sha256"], dict) or not provenance["native_sha256"]:
@@ -228,6 +231,22 @@ def validate_measurement(manifest, measurement, sample_field="samples"):
             hash_value(digest, 64, name)
         text(provenance["timing_origin"], "timing_origin")
         text(provenance["coverage"], "coverage")
+        if version == 3:
+            inventory = provenance["model_inventory"]
+            object_fields(inventory, ("native_rid", "manifest_sha256", "installed_bytes", "files_sha256"),
+                          "provenance.model_inventory")
+            if inventory["native_rid"] != native_rid(environment["os"], environment["native_arch"]):
+                raise ValueError("Model inventory RID differs from verified architecture")
+            hash_value(inventory["manifest_sha256"], 64, "model inventory manifest")
+            number(inventory["installed_bytes"], "model inventory installed bytes", positive=True, integer=True)
+            if (inventory["manifest_sha256"] != measurement["model"]["sha256"]
+                    or inventory["installed_bytes"] != resources["model_install_bytes"]):
+                raise ValueError("Selected model inventory manifest/bytes differ from measured values")
+            object_fields(inventory["files_sha256"], (
+                "model-target-lock.json", "model-target-lock.schema.json", "scripts/model_lock.py"
+            ), "model inventory metadata source hashes")
+            for name, digest in inventory["files_sha256"].items():
+                hash_value(digest, 64, name)
     samples = measurement[sample_field]
     if not isinstance(samples, list):
         raise ValueError("Measurement samples must be an array")
@@ -305,7 +324,7 @@ def score_measurement(manifest, measurement):
         **score_samples(manifest, measurement, "samples"),
         "measurement_raw": copy.deepcopy(measurement),
     }
-    if measurement["schema_version"] == 2:
+    if measurement["schema_version"] >= 2:
         report["batch"] = score_samples(manifest, measurement, "batch_samples")
     return report
 

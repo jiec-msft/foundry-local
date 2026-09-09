@@ -71,8 +71,10 @@ The ten files total 1,929,400 bytes and 60.28 seconds.
 
 ## Offline checks and reproducibility
 
-Normal consumption and unit tests need only Python 3.11+ stdlib and the committed
-WAVs. No model, runtime, native build, corpus download, decoder, or account is needed:
+Independent scoring needs only Python 3.11+ stdlib and the committed WAVs.
+Target-metadata consumers/tests additionally use existing Git and PowerShell7
+`Test-Json` for immutable source and JSON Schema2020-12 validation. No model,
+runtime, native build, corpus download, decoder, or account is needed:
 
 ```powershell
 python -m unittest discover -s sdk_v2\java\evaluation -p "test_*.py" -v
@@ -122,10 +124,15 @@ Do not average per-utterance WERs. Report pooled corpus, `dev-clean`, and
 and hypothesis. Zero-reference WER is undefined (`null`), not zero. A missing
 hypothesis is invalid evidence; an actual empty hypothesis is scored as deletions.
 
-The current input contract is `measurement.schema.json` version 2. It preserves
+New target-aware output uses `measurement.schema.json` version3. It preserves
 unknown metrics as `{"value": null, "reason": "..."}` rather than inventing
 zeros or equating installed size with network transfer. The scorer still accepts
-version 1 for its independent golden fixtures. After authorized actual SDK execution:
+historical version2 measurements and version1 golden fixtures without relabeling
+them. Version3 separately records `sdk.metadata_git_sha` and
+`provenance.model_inventory`: verified native RID, selected manifest, actual
+installed bytes and SHA256 of the three consumed metadata Git blobs. Scoring
+requires agreement with model hash, resource bytes and actual architecture.
+After authorized actual SDK execution:
 
 ```powershell
 python sdk_v2\java\evaluation\scorer.py `
@@ -194,6 +201,37 @@ The actual SDK [API](../API.md), [event schema](../cli.schema.json), model lock
 and bundled runtime/native locks are authoritative. SDK API/build changes belong
 to the coordinator/SDK worker, not this directory.
 
+## Independently pinned target metadata
+
+The reviewed external SDK contract is merged at
+`38bbca7f4943687cd90d4aecc365424bb914957e` and pinned separately as
+`metadata_git_sha` in both CI locks and `model_inventory.py`. Binary source
+remains `d0946a0764d9cfa4b3d684940d6d5c66165427b8`; its64,000-byte JAR hash,
+Java17 bytecode, legacy `model-lock.json` and complete existing binary-source
+drift check remain unchanged.
+
+`model_inventory.py` rejects drift against the two revisions separately, then
+reads the base lock from the binary revision and the sidecar/schema/selector
+directly from the metadata revision's Git blobs. The SDK selector executes those
+verified source bytes, not a mutable working-tree module or cached bytecode.
+Thus a matching `metadata_git_sha` string in JSON is not sufficient provenance.
+The actual SDK schema is enforced with existing `Test-Json`; no packages are
+downloaded to validate it.
+
+Preparation preflights the RID derived from verified native host identity before
+downloads, then selects again after actual JVM/native verification. Integration
+selects using the verified native RID returned by `verify_artifacts`, never a
+lane alias. It invokes the SDK's `select_model_inventory` without duplicating
+its selection rules. All16 actual files, including the raw generated marker,
+must match selected sizes/hashes, complete ordinal manifest and total bytes.
+Failure evidence retains those comparisons, RID and metadata revision.
+
+At the pinned38bb revision, `win-x64`, `win-arm64` and `linux-x64` are observed.
+**`linux-arm64` and `osx-arm64` still reject as unobserved**, despite the later
+diagnostic observations recorded here. Only the SDK owner can update that
+contract; no evaluator fallback or automatic promotion is permitted. The
+current consumer has offline coverage only, not a new native qualification.
+
 ## First hosted matrix and remaining integrity gate
 
 The sole approved hosted workflow is `java-sdk-evaluation.yml`; model evaluation is
@@ -204,10 +242,10 @@ is evidence that an ASR model ran on a hosted target. The automatic
 `java-sdk-unit.yml` workflow is removed from this branch; all offline tests and
 the documented `python -m unittest discover` command remain available.
 
-The checked-in `enabled`, `dispatch_authorized` and
-`dependency_license_review_complete` flags are true for the approved first
-bounded public matrix. This does not enable repository Actions or dispatch a
-run: both operations remain with the coordinator. The sole workflow allowlist
+The checked-in `enabled` and `dependency_license_review_complete` flags retain
+the reviewed preparation state; `dispatch_authorized` is now **false** because
+no new run is authorized. Current metadata also blocks the two unobserved RIDs.
+Repository operations remain with the coordinator. The sole workflow allowlist
 is `java-sdk-evaluation.yml`; inherited workflow configuration is unchanged here.
 
 Standard labels were rechecked against the public
@@ -286,8 +324,10 @@ the same marker-only difference and complete manifest on each target; see
 [their individual evidence](D094_EVALUATION.md#arm64-diagnostic-inventories).
 All three diagnostics still failed before transcription.
 
-**Next dependency:** coordinator supplies these observations to the SDK metadata
-owner, then provides the actual reviewed contract before evaluator integration.
+**Next dependency:** coordinator provides the final reviewed metadata SHA
+containing the separately observed ARM64 tuples. This consumer is complete at38bb
+and must remain fail-closed for its two unobserved entries until that handoff.
+Final metadata integration and any native/hosted qualification need new approval.
 One of the maximum two full matrices and three diagnostic single-lane dispatches
 have occurred; no more dispatches are authorized. This evaluator did not
 dispatch, rerun, change settings, normalize model files, or accept new hashes.

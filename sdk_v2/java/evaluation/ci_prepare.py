@@ -14,7 +14,8 @@ import tarfile
 import urllib.request
 import zipfile
 
-from platform_checks import host_identity, native_identity
+from model_inventory import METADATA_SHA, load_model_metadata
+from platform_checks import host_identity, native_identity, native_rid
 
 ROOT = Path(__file__).resolve().parent
 SDK = ROOT.parent
@@ -77,14 +78,14 @@ def prepare(args):
     tools = json.loads((ROOT / "ci-tools-lock.json").read_text(encoding="utf-8"))
     contract = json.loads((ROOT / "sdk-contract.json").read_text(encoding="utf-8"))
     target = next(t for t in contract["supported_targets"] if t["id"] == args.target)
-    if host_identity() != (target["os"], target["arch"]):
+    host = host_identity()
+    if host != (target["os"], target["arch"]):
         raise ValueError("Actual host does not match requested standard runner lane")
-    # The merged evaluation revision may differ; the SDK source itself must not.
-    subprocess.run(["git", "diff", "--exit-code", contract["sdk_git_sha"], "--",
-                    "sdk_v2/java/pom.xml", "sdk_v2/java/src", "sdk_v2/java/THIRD_PARTY_NOTICES.md",
-                    "sdk_v2/java/scripts/prepare_runtime.py", "sdk_v2/java/model-lock.json",
-                    "sdk_v2/java/API.md", "sdk_v2/java/cli.schema.json", "LICENSE"],
-                   cwd=SDK.parents[1], check=True)
+    metadata = load_model_metadata(contract)
+    rid = native_rid(*host)
+    if target["rid"] != rid:
+        raise ValueError("Preparation target RID differs from verified native host")
+    metadata.select(rid)
     pin = tools["jdk"][args.target]
     archive = BUILD / "downloads" / ("jdk.zip" if target["os"] == "windows" else "jdk.tar.gz")
     download(pin, archive)
@@ -130,9 +131,15 @@ def prepare(args):
     subprocess.run([sys.executable, str(SDK / "scripts" / "prepare_runtime.py"),
                     "--runtime-dir", str(runtime), "--cache-dir", str(BUILD / "native-downloads"),
                     "--rid", target["rid"], "--explicit-download", "--accept-native-licenses"], check=True)
+    from integration import verify_artifacts
+    _, verified_rid, _ = verify_artifacts(jar, runtime, args.target, java)
+    selected = metadata.select(verified_rid)
     with args.output.open("a", encoding="utf-8") as output:
         for key, value in {"java": java, "jar": jar, "runtime": runtime,
-                           "model_cache": BUILD / "model-cache"}.items():
+                           "model_cache": BUILD / "model-cache", "metadata_git_sha": METADATA_SHA,
+                           "inventory_rid": verified_rid,
+                           "model_manifest_sha256": selected["manifestSha256"],
+                           "expected_model_install_bytes": selected["installedBytes"]}.items():
             output.write(f"{key}={value}\n")
 
 

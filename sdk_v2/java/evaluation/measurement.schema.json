@@ -1,18 +1,21 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Foundry Local Java public ASR smoke measurement v2",
+  "title": "Foundry Local Java public ASR smoke measurement v2/v3",
   "description": "Actual paced inference evidence, not example output. Cross-field timing, exact fixture membership and architecture agreement are enforced by scorer.py.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "fixture_set_id", "sdk", "environment", "runtime", "model", "readiness", "resources", "lifecycle", "samples", "batch_samples", "cancellation", "provenance"],
   "properties": {
-    "schema_version": {"type": "integer", "const": 2},
+    "schema_version": {"type": "integer", "enum": [2, 3]},
     "fixture_set_id": {"$ref": "#/$defs/nonempty"},
     "sdk": {
       "type": "object",
       "additionalProperties": false,
       "required": ["git_sha"],
-      "properties": {"git_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}}
+      "properties": {
+        "git_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "metadata_git_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
     },
     "environment": {
       "type": "object",
@@ -155,10 +158,39 @@
         "jna_sha256": {"$ref": "#/$defs/sha256"},
         "native_sha256": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/sha256"}},
         "timing_origin": {"$ref": "#/$defs/nonempty"},
-        "coverage": {"$ref": "#/$defs/nonempty"}
+        "coverage": {"$ref": "#/$defs/nonempty"},
+        "model_inventory": {
+          "type": "object", "additionalProperties": false,
+          "required": ["native_rid", "manifest_sha256", "installed_bytes", "files_sha256"],
+          "properties": {
+            "native_rid": {"enum": ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-arm64"]},
+            "manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "installed_bytes": {"type": "integer", "minimum": 1},
+            "files_sha256": {
+              "type": "object", "additionalProperties": false,
+              "required": ["model-target-lock.json", "model-target-lock.schema.json", "scripts/model_lock.py"],
+              "properties": {
+                "model-target-lock.json": {"$ref": "#/$defs/sha256"},
+                "model-target-lock.schema.json": {"$ref": "#/$defs/sha256"},
+                "scripts/model_lock.py": {"$ref": "#/$defs/sha256"}
+              }
+            }
+          }
+        }
       }
     }
   },
+  "allOf": [{
+    "if": {"properties": {"schema_version": {"const": 3}}},
+    "then": {"properties": {
+      "sdk": {"required": ["metadata_git_sha"]},
+      "provenance": {"required": ["model_inventory"]}
+    }},
+    "else": {"properties": {
+      "sdk": {"not": {"required": ["metadata_git_sha"]}},
+      "provenance": {"not": {"required": ["model_inventory"]}}
+    }}
+  }],
   "$defs": {
     "nonempty": {"type": "string", "minLength": 1, "pattern": "\\S"},
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},

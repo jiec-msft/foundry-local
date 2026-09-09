@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from model_inventory import load_model_metadata, require_metadata_pin
+from platform_checks import native_rid
 
 ROOT = Path(__file__).resolve().parent
 FULL_MATRIX_PREFIX = "Java ASR full-matrix "
@@ -53,6 +55,8 @@ def validate_dispatch(lock, contract, context, previous_full_matrices):
     sha = context["sdk_sha"]
     if not re.fullmatch(r"[0-9a-f]{40}", sha) or sha != lock["sdk_git_sha"] or sha != contract["sdk_git_sha"]:
         raise ValueError("SDK SHA must be the immutable reviewed handoff recorded in both locks")
+    require_metadata_pin(contract)
+    require_metadata_pin(lock)
     evidence = lock["local_windows_evidence"]
     if not isinstance(evidence, dict) or evidence.get("sdk_git_sha") != sha:
         raise ValueError("Matching local Windows SDK success evidence is required before CI")
@@ -66,6 +70,8 @@ def validate_dispatch(lock, contract, context, previous_full_matrices):
     targets = {target["id"] for target in contract["supported_targets"]}
     if {t["id"]: t["runner"] for t in contract["supported_targets"]} != RUNNERS:
         raise ValueError("Only the five pinned standard public runners are permitted")
+    if any(t["rid"] != native_rid(t["os"], t["arch"]) for t in contract["supported_targets"]):
+        raise ValueError("Each lane must retain its exact native RID")
     if (lock["maximum_full_matrices"] != 2 or lock["max_parallel"] != 2
             or lock["job_timeout_minutes"] != 20 or lock["cache_enabled"] is not False):
         raise ValueError("Evaluation resource budget must remain fixed")
@@ -125,7 +131,9 @@ def main():
     integration.add_argument("--timeout-seconds", type=int, default=840)
     args = parser.parse_args()
     if args.command == "integration":
-        require_current_source(json.loads((ROOT / "ci-lock.json").read_text(encoding="utf-8")))
+        lock = json.loads((ROOT / "ci-lock.json").read_text(encoding="utf-8"))
+        require_current_source(lock)
+        require_metadata_pin(lock)
         raise SystemExit(subprocess.call(integration_command(args), env={**os.environ, "ORT_TELEMETRY_DISABLED": "1"}))
     lock = json.loads((ROOT / "ci-lock.json").read_text(encoding="utf-8"))
     contract = json.loads((ROOT / "sdk-contract.json").read_text(encoding="utf-8"))
@@ -142,6 +150,11 @@ def main():
     history = json.loads(args.history.read_text(encoding="utf-8"))
     matrix = validate_dispatch(lock, contract, context, previous_full_count(history, os.environ["GITHUB_RUN_ID"]))
     validate_failed_lane(history, context)
+    metadata = load_model_metadata(contract)
+    if lock["model"]["id"] != metadata.base["id"] or lock["model"]["sha256"] != metadata.base["manifestSha256"]:
+        raise ValueError("CI legacy model binding differs from the independently pinned base lock")
+    for target in matrix:
+        metadata.select(target["rid"])
     with args.output.open("a", encoding="utf-8") as output:
         output.write("matrix=" + json.dumps({"include": matrix}, separators=(",", ":")) + "\n")
 

@@ -5,6 +5,7 @@
   "owner": "jiec-msft",
   "allowed_ref": "refs/heads/mason/java-asr-evaluation",
   "sdk_git_sha": "d0946a0764d9cfa4b3d684940d6d5c66165427b8",
+  "metadata_git_sha": "38bbca7f4943687cd90d4aecc365424bb914957e",
   "source_pin_refresh_required": false,
   "local_windows_evidence": {
     "sdk_git_sha": "d0946a0764d9cfa4b3d684940d6d5c66165427b8",
@@ -43,7 +44,7 @@
     "model_transfer_bytes": null,
     "end_to_end_readiness": null
   },
-  "dispatch_authorized": true,
+  "dispatch_authorized": false,
   "ci_lane_status": {
     "windows-x64": "not_run",
     "windows-arm64": "not_run",
@@ -55,8 +56,9 @@
   "model": {
     "id": "nemotron-3.5-asr-streaming-0.6b-generic-cpu:3",
     "sha256": "483ce0b37c44b952a369de4257161df7ca42c8621109f20222ad1a9126f55001",
-    "hash_kind": "installed-file-manifest; not archive or download bytes",
+    "hash_kind": "Legacy Windows base manifest only; acceptance uses the selected native RID from pinned target metadata",
     "source_lock": "../model-lock.json",
+    "target_source_lock": "../model-target-lock.json",
     "redistribution_authorized": false,
     "license_review": {
       "status": "Coordinator-approved operational evaluation use for the first bounded public matrix",

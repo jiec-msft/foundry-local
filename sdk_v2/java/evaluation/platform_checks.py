@@ -28,6 +28,11 @@ def assert_supported(os_name, arch):
         raise ValueError(f"Unsupported Foundry Local Java ASR target: {os_name}-{arch}")
 
 
+def native_rid(os_name, arch):
+    assert_supported(os_name, arch)
+    return {"windows": "win", "linux": "linux", "macos": "osx"}[os_name] + "-" + arch
+
+
 def host_identity():
     os_name = {"Windows": "windows", "Linux": "linux", "Darwin": "macos"}.get(platform.system())
     if os_name is None:
