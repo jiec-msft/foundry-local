@@ -185,3 +185,62 @@ Evaluation-only license scope and the unresolved catalog/card/notices discrepanc
 remain unchanged; model/native redistribution and production deployment are
 not authorized. This ten-utterance smoke makes no product-quality, plugin,
 microphone or hardware-generation coverage claim.
+
+## Linux x64 diagnostic inventory
+
+The coordinator dispatched one diagnostic failed-lane run,
+[34398826339](https://github.com/jiec-msft/foundry-local/actions/runs/34398826339),
+executing `e7fa302b54fe410d762bd47965fcb7e39d4ff1b6` with the unchanged qualified
+SDK. It ran from 2026-09-09T20:04:19Z through20:05:45Z and remained **failed**,
+as expected. Authorization, canonical builder and explicit preparation passed;
+native identify/prepare exited0, then the model integrity gate rejected the
+marker. No transcription or complete ASR measurement occurred.
+
+The [raw failure artifact](https://github.com/jiec-msft/foundry-local/actions/runs/34398826339/artifacts/10122627320)
+contains a6,034-byte `failure.json`, SHA256
+`4c1f6c49793f28076c86753934e6e3c704e992d71e0451768f0ae2d70bdf2d45`.
+Its API-reported archive size is1,654 bytes and archive digest is
+`8778e6429ef94e6cda71751f65232c3dcb5188aef4a1ca810598f3da49998e43`;
+retention is seven days. These are artifact sizes, not network-transfer metrics.
+Only metadata was recovered locally, not model files or a new SDK/runtime.
+
+All16 entries were compared against the unchanged SDK model lock, including
+every file sorted after the first mismatch. All15 other files match their
+exact expected byte counts and SHA256: LICENSE, NOTICES, audio_processor_config,
+decoder and encoder ONNX/data, genai_config, joint ONNX/data, model_config,
+silero_vad, tokenizer, tokenizer_config and vocab. No additional locked-file
+differences were observed.
+
+| Integrity value | Locked Windows inventory | Observed Linux x64 inventory |
+|---|---|---|
+| Generated marker bytes | 90 | 87 |
+| Generated marker SHA256 | `881e9c5b34349dabe826cf88857835d15623c1a92a311d002812c399fe1128ef` | `9bb2dbe6766fb9a5e3e1c8407a88141a480363d0aca7d4df4f88aa3e0399adeb` |
+| Sum of16 locked file sizes | 793,344,452 | 793,344,449 |
+| Full raw-file manifest SHA256 | `483ce0b37c44b952a369de4257161df7ca42c8621109f20222ad1a9126f55001` | `8d02c1ffd0c9532751ef736ea5941c0733b2219c15ec68c038063dada7e29b8a` |
+
+The actual manifest was independently recomputed from all observed filename,
+decimal size and SHA256 entries using the locked ordinal/TAB/LF method.
+The marker matches the exact LF candidate, supporting explanation1 on this
+Linux x64 run. Different marker fields (explanation2) are not supported by this
+digest, and additional differences among the16 locked files (explanation3) are
+falsified by the complete inventory. **Linux ARM64 and macOS ARM64 inventories
+have not been observed; their ASR coverage remains absent.**
+
+### Proposed portable lock boundary, not implemented
+
+Coordinator/SDK-owner review should distinguish the runtime-generated marker
+from the15 immutable payload/configuration/license files, without excluding it
+from integrity verification. Keep all common file sizes/hashes unchanged, and
+define reviewed **target-specific raw marker bytes/hash, total locked-file size
+and complete manifest hash**. Preserve existing Windows x64/ARM64 pins; the
+observed Linux x64 tuple above is a proposal for explicit approval, not an
+automatically accepted hash. Unobserved targets must remain fail-closed until
+their inventory is observed and reviewed.
+
+Verification must still compare actual bytes and the complete target manifest:
+no newline normalization, content rewriting, field-only comparison, or accepting
+an arbitrary observed digest. No SDK/model-lock, evaluator code, workflow or gate
+was changed in this evidence-only continuation. Full-matrix count remains1of2,
+plus one diagnostic single-lane dispatch. Further implementation or hosted work
+requires a new coordinator decision; prior Windows native evidence and the
+first matrix's incomplete artifacts remain separate.

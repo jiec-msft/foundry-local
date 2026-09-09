@@ -275,8 +275,15 @@ do not call all weights MIT. Retain all applicable notices; model/native
 redistribution remains unauthorized. See `model.license_review` in `ci-lock.json`
 for the precise restrictions and public sources.
 
-**Next dependency:** coordinator reviews the failed-lane integrity diagnostics and
-the generated-marker platform hypothesis before authorizing any further hosted
-work. The first matrix consumed one of the maximum two full dispatches. The
-coordinator already registered and activated only the approved manual workflow;
-this evaluator did not dispatch, rerun, change settings, or publish a release.
+The subsequent Linux x64 diagnostic
+[run34398826339](https://github.com/jiec-msft/foundry-local/actions/runs/34398826339)
+observed exactly the87-byte LF marker candidate; all15 other locked files matched.
+It still failed before ASR. The complete observed manifest and a narrowly scoped
+target-specific generated-marker lock proposal are recorded in
+[the diagnostic evidence section](D094_EVALUATION.md#linux-x64-diagnostic-inventory).
+Linux ARM64/macOS ARM64 marker bytes remain unobserved.
+
+**Next dependency:** coordinator/SDK owner reviews that proposal before any pin
+change or further hosted work. One of the maximum two full matrices and one
+diagnostic single-lane dispatch have occurred. This evaluator did not dispatch,
+rerun, change settings, normalize model files, or accept new hashes.
