@@ -1,8 +1,17 @@
 {
   "schema_version": 1,
-  "status": "BOUND_CI_DISABLED",
+  "status": "PENDING_QUALIFIED_SDK_REFRESH",
   "baseline_sha": "afdb275c0b79f77dbbd1c901de235bfea124441d",
   "sdk_git_sha": "06bf21e65f9a48518a0422558c5bbac42b2fd618",
+  "pending_sdk_refresh": {
+    "sdk_git_sha": "d0946a0764d9cfa4b3d684940d6d5c66165427b8",
+    "sdk_jar_bytes": 64000,
+    "sdk_jar_sha256": "bf644d3127afff912683731094821a8f6a751f003c284a9c15ddceaecebe0863",
+    "native_qualification": "pending",
+    "provenance": "Coordinator-supplied public source/artifact tuple; not merged, built or executed by this evaluator.",
+    "reason": "Windows non-UTF8 JSONL and cancel/result-publication race fixes require artifact-specific native qualification.",
+    "activation": "Coordinator integrates the qualified SDK after this evaluation scope is finalized; refresh all active pins and obtain explicit permission for the smallest refreshed local run."
+  },
   "sdk_jar": {
     "name": "foundry-local-java-0.1.0-poc.jar",
     "bytes": 62370,

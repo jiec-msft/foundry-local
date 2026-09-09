@@ -1,17 +1,28 @@
 # Public Java ASR smoke evaluation
 
-**Windows Java 17 evaluated; hosted CI remains disabled and undispatched.**
+**Historical Windows evidence is scoped to 06bf; qualified SDK refresh is pending.
+Hosted CI remains disabled and undispatched.**
 This directory is independently authored evaluation code, not an SDK implementation.
 The ten fixed English utterances are a smoke set, **never a product quality claim**.
 They are not representative of languages, accents, microphones, conversational speech,
 long recordings, accessibility needs, or the population of users.
 
-The immutable SDK source is `06bf21e65f9a48518a0422558c5bbac42b2fd618`.
+The currently bound SDK source is `06bf21e65f9a48518a0422558c5bbac42b2fd618`.
 The evaluator's own bounded Windows run covered all ten batch WAVs, all ten
 20 ms paced streams, and early cancellation with explicit inference cleanup.
 Both modes produced **8 edits / 151 reference words (5.298% WER)**. See
 [LOCAL_EVALUATION.md](LOCAL_EVALUATION.md) for exact scope, timing, artifact hashes,
 limitations and the distinction between native execution and report finalization.
+
+Subsequent review identified Windows non-UTF8 JSONL and a cancel/result-publication
+race in that source. The coordinator supplied candidate
+`d0946a0764d9cfa4b3d684940d6d5c66165427b8` and a 64,000-byte JAR with SHA256
+`bf644d3127afff912683731094821a8f6a751f003c284a9c15ddceaecebe0863`.
+Its native qualification is **pending**; the existing 06bf results do not qualify
+the new artifact. Candidate metadata is recorded separately from active pins in
+`sdk-contract.json`. No SDK merge, new build or additional inference was performed
+for this update. `source_pin_refresh_required` blocks CI and its integration
+entry point even if the other authorization flags are enabled.
 
 ## Frozen public fixtures
 
@@ -242,7 +253,10 @@ uploaded. Any later cache requires license review and a total below 10 GB.
 Do not enable inherited workflows. Later enablement must allowlist only the approved
 Java workflow(s); prerelease publication and actual CI require separate permission.
 
-**Next dependency:** coordinator reviews the bound workflow and local evidence,
+**Next dependency:** coordinator supplies and integrates the qualified newer SDK,
+then requests active-pin refresh and the smallest explicitly authorized local run.
+Historical 06bf evidence must not be reused as the new artifact's qualification.
+After that, the coordinator reviews the bound workflow and refreshed local evidence,
 resolves explicit model-download license acceptance, safely registers the workflow
 on the default branch, allowlists only the intended workflow(s), and authorizes
 dispatch. `workflow_dispatch` is not available merely because a workflow exists on

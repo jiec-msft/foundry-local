@@ -31,6 +31,11 @@ def integration_command(args):
     return command
 
 
+def require_current_source(lock):
+    if lock.get("source_pin_refresh_required") is not False:
+        raise ValueError("BLOCKED: qualified SDK source-pin refresh and artifact-specific local evidence are required")
+
+
 def validate_dispatch(lock, contract, context, previous_full_matrices):
     if context["repository"] != lock["repository"] or context["actor"] != lock["owner"]:
         raise ValueError("Only the public fork owner can dispatch this evaluation")
@@ -38,6 +43,7 @@ def validate_dispatch(lock, contract, context, previous_full_matrices):
         raise ValueError("Evaluation dispatch ref is not allowlisted")
     if context["run_attempt"] != 1:
         raise ValueError("Do not rerun whole jobs: dispatch only failed lanes after a concrete fix")
+    require_current_source(lock)
     if not all(lock[key] is True for key in (
         "enabled", "dispatch_authorized", "integration_adapter_ready", "dependency_license_review_complete"
     )):
@@ -116,6 +122,7 @@ def main():
     integration.add_argument("--accept-model-license", action="store_true")
     args = parser.parse_args()
     if args.command == "integration":
+        require_current_source(json.loads((ROOT / "ci-lock.json").read_text(encoding="utf-8")))
         raise SystemExit(subprocess.call(integration_command(args), env={**os.environ, "ORT_TELEMETRY_DISABLED": "1"}))
     lock = json.loads((ROOT / "ci-lock.json").read_text(encoding="utf-8"))
     contract = json.loads((ROOT / "sdk-contract.json").read_text(encoding="utf-8"))

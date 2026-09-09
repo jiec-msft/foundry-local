@@ -1,7 +1,15 @@
-# Evaluator-owned Windows Java 17 smoke, 2026-09-10
+# Historical 06bf Windows Java 17 smoke, 2026-09-10
 
 This is a ten-utterance English **smoke**, not a product quality claim or a
 five-platform/JVM compatibility certification.
+
+**Source-specific historical evidence, not current-artifact qualification.**
+Subsequent review found Windows non-UTF8 JSONL and a cancel/result-publication
+race in 06bf. Candidate `d0946a0764d9cfa4b3d684940d6d5c66165427b8` addresses those
+defects but its native qualification is pending. None of the results or artifact
+hashes below qualifies that candidate's 64,000-byte JAR
+(`bf644d3127afff912683731094821a8f6a751f003c284a9c15ddceaecebe0863`).
+The retained 06bf observations and their original hashes are unchanged.
 
 The evaluator ran the immutable public SDK source
 `06bf21e65f9a48518a0422558c5bbac42b2fd618` through its own `integration.py`.

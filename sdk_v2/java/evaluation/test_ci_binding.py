@@ -4,6 +4,8 @@
 import argparse
 import json
 from pathlib import Path
+import subprocess
+import sys
 import unittest
 
 from ci import ROOT, RUNNERS, integration_command
@@ -44,6 +46,17 @@ class BindingTests(unittest.TestCase):
     def test_mismatched_artifact_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "refusing substitution"):
             verify(ROOT / "ci-tools-lock.json", {"sha256": "0" * 64})
+
+    def test_pending_refresh_blocks_integration_before_any_java_launch(self):
+        command = [
+            sys.executable, str(ROOT / "ci.py"), "integration", "--target", "windows-x64",
+            "--java", "must-not-launch-java", "--jar", "not-a-jar", "--runtime-dir", "not-a-runtime",
+            "--cache-dir", "not-a-cache", "--output", str(ROOT / "build" / "TestResults" / "must-not-run"),
+        ]
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("qualified SDK source-pin refresh", result.stderr)
+        self.assertNotIn("FileNotFoundError", result.stderr)
 
 
 if __name__ == "__main__":

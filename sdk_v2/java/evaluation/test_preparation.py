@@ -124,6 +124,7 @@ class GateTests(unittest.TestCase):
     def ready_synthetic_unit_lock(self):
         for key in ("enabled", "dispatch_authorized", "integration_adapter_ready", "dependency_license_review_complete"):
             self.lock[key] = True
+        self.lock["source_pin_refresh_required"] = False
         self.lock["sdk_git_sha"] = self.contract["sdk_git_sha"] = self.context["sdk_sha"]
         self.lock["local_windows_evidence"] = {"sdk_git_sha": "a" * 40, "sha256": "b" * 64}
         self.lock["model"] = {"sha256": "c" * 64}
@@ -135,6 +136,15 @@ class GateTests(unittest.TestCase):
         self.assertFalse(self.lock["dispatch_authorized"])
         self.assertEqual("06bf21e65f9a48518a0422558c5bbac42b2fd618", self.contract["sdk_git_sha"])
         with self.assertRaisesRegex(ValueError, "BLOCKED"):
+            validate_dispatch(self.lock, self.contract, self.context, 0)
+
+    def test_stale_source_cannot_dispatch_even_with_other_authorizations(self):
+        self.ready_synthetic_unit_lock()
+        self.lock["source_pin_refresh_required"] = True
+        with self.assertRaisesRegex(ValueError, "source-pin refresh"):
+            validate_dispatch(self.lock, self.contract, self.context, 0)
+        del self.lock["source_pin_refresh_required"]
+        with self.assertRaisesRegex(ValueError, "source-pin refresh"):
             validate_dispatch(self.lock, self.contract, self.context, 0)
 
     def test_all_five_standard_targets_only(self):
