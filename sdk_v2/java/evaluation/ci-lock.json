@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "enabled": false,
+  "enabled": true,
   "repository": "jiec-msft/foundry-local",
   "owner": "jiec-msft",
   "allowed_ref": "refs/heads/mason/java-asr-evaluation",
@@ -43,7 +43,7 @@
     "model_transfer_bytes": null,
     "end_to_end_readiness": null
   },
-  "dispatch_authorized": false,
+  "dispatch_authorized": true,
   "ci_lane_status": {
     "windows-x64": "not_run",
     "windows-arm64": "not_run",
@@ -58,9 +58,21 @@
     "hash_kind": "installed-file-manifest; not archive or download bytes",
     "source_lock": "../model-lock.json",
     "redistribution_authorized": false,
-    "license_review": "Pending: catalog MIT versus NVIDIA OpenMDW-1.1 card and NVIDIA Open Model License notices; see SDK README"
+    "license_review": {
+      "status": "Coordinator-approved operational evaluation use for the first bounded public matrix",
+      "scope": "Explicit public downloads for attributed English ASR smoke only; no production deployment, surveillance, biometrics, restricted or harmful use, or safety-guard bypass. This is not production redistribution permission or legal signoff.",
+      "reviewed_materials": [
+        "Exact downloaded model LICENSE: Microsoft MIT",
+        "Exact downloaded model NOTICES: NVIDIA Open Model License plus Silero MIT",
+        "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/ (use grant 2.2)",
+        "https://www.nvidia.com/en-us/agreements/trustworthy-ai/terms/",
+        "https://openmdw.ai/license/1-1/"
+      ],
+      "discrepancy": "Catalog, official model card and packaged notices remain inconsistent; do not describe all model weights as MIT.",
+      "notices": "Retain applicable MIT, Apache, GPL-with-Classpath, native and model notices. JDKs and Maven are build tools, not redistributed. Native/runtime/model redistribution remains unauthorized."
+    }
   },
-  "dependency_license_review_complete": false,
+  "dependency_license_review_complete": true,
   "maximum_full_matrices": 2,
   "max_parallel": 2,
   "job_timeout_minutes": 20,

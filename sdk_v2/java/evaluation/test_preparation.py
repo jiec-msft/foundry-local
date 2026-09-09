@@ -131,11 +131,43 @@ class GateTests(unittest.TestCase):
         for dependency in self.contract["runtime"]["dependencies"]:
             dependency["sha256"] = "d" * 64
 
-    def test_prepared_revision_is_fail_closed(self):
-        self.assertFalse(self.lock["enabled"])
-        self.assertFalse(self.lock["dispatch_authorized"])
-        self.assertEqual("d0946a0764d9cfa4b3d684940d6d5c66165427b8", self.contract["sdk_git_sha"])
-        with self.assertRaisesRegex(ValueError, "BLOCKED"):
+    def test_each_authorization_gate_rejects_when_false(self):
+        self.ready_synthetic_unit_lock()
+        for gate in ("enabled", "dispatch_authorized", "integration_adapter_ready", "dependency_license_review_complete"):
+            with self.subTest(gate=gate), self.assertRaisesRegex(ValueError, "BLOCKED"):
+                validate_dispatch({**self.lock, gate: False}, self.contract, self.context, 0)
+
+    def test_checked_in_readiness_lock_is_coherent(self):
+        sdk_sha = "d0946a0764d9cfa4b3d684940d6d5c66165427b8"
+        for gate in ("enabled", "dispatch_authorized", "integration_adapter_ready", "dependency_license_review_complete"):
+            self.assertIs(self.lock[gate], True)
+        self.assertIs(self.lock["source_pin_refresh_required"], False)
+        self.assertEqual(sdk_sha, self.contract["sdk_git_sha"])
+        self.assertEqual(sdk_sha, self.lock["sdk_git_sha"])
+        self.assertEqual(sdk_sha, self.lock["local_windows_evidence"]["sdk_git_sha"])
+        self.assertEqual(64000, self.contract["sdk_jar"]["bytes"])
+        self.assertEqual(self.contract["sdk_jar"]["sha256"],
+                         self.lock["local_windows_evidence"]["canonical_rebuild"]["sha256"])
+        model = json.loads((ROOT.parent / "model-lock.json").read_text(encoding="utf-8"))
+        self.assertEqual(model["id"], self.lock["model"]["id"])
+        self.assertEqual(model["manifestSha256"], self.lock["model"]["sha256"])
+        self.assertIs(self.lock["model"]["redistribution_authorized"], False)
+        self.assertEqual({target["id"] for target in self.contract["supported_targets"]},
+                         set(self.lock["ci_lane_status"]))
+        self.assertEqual({"not_run"}, set(self.lock["ci_lane_status"].values()))
+        self.assertEqual(5, len(validate_dispatch(self.lock, self.contract, {**self.context, "sdk_sha": sdk_sha}, 0)))
+        workflows = ROOT.parents[2] / ".github" / "workflows"
+        self.assertEqual(["java-sdk-evaluation.yml"], sorted(p.name for p in workflows.glob("java-sdk*.yml")))
+
+    def test_model_evidence_dependency_and_resource_guards_reject(self):
+        self.ready_synthetic_unit_lock()
+        for field, value in (("model", None), ("model", {"sha256": "unpinned"}),
+                             ("local_windows_evidence", None), ("maximum_full_matrices", 3),
+                             ("max_parallel", 3), ("job_timeout_minutes", 21), ("cache_enabled", True)):
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                validate_dispatch({**self.lock, field: value}, self.contract, self.context, 0)
+        self.contract["runtime"]["dependencies"][0]["sha256"] = None
+        with self.assertRaisesRegex(ValueError, "dependency hash"):
             validate_dispatch(self.lock, self.contract, self.context, 0)
 
     def test_stale_source_cannot_dispatch_even_with_other_authorizations(self):

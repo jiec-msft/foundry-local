@@ -20,7 +20,8 @@ See [D094_EVALUATION.md](D094_EVALUATION.md) for timings, hashes and limits.
 The separate [historical06bf evidence](LOCAL_EVALUATION.md) is unchanged and is
 not relabeled as new-artifact qualification. The d094 source fixes its Windows
 JSONL encoding and cancel/result-publication defects. The source-refresh gate is
-cleared after qualified installation; dispatch authorization remains false.
+cleared after qualified installation. Source-side readiness is approved for the
+first bounded matrix; repository Actions activation and dispatch remain coordinator-only.
 
 ## Frozen public fixtures
 
@@ -193,15 +194,21 @@ The actual SDK [API](../API.md), [event schema](../cli.schema.json), model lock
 and bundled runtime/native locks are authoritative. SDK API/build changes belong
 to the coordinator/SDK worker, not this directory.
 
-## Hosted CI is bound, not enabled
+## Source-side CI readiness; repository activation pending
 
-The two `java-sdk*.yml` workflows are scoped to evaluation paths. The small
-unit workflow is offline on a standard `ubuntu-24.04` host; model evaluation is
+The sole approved hosted workflow is `java-sdk-evaluation.yml`; model evaluation is
 **workflow_dispatch only**, owner/repository/ref guarded, and fails closed against
 `ci-lock.json`. Its integration entry point invokes the real bounded evaluator
 after explicit pinned preparation. Neither that gate nor parsing native headers
-is evidence that an ASR model ran on a hosted target. The fork Actions setting
-and dispatch authorization remain disabled.
+is evidence that an ASR model ran on a hosted target. The automatic
+`java-sdk-unit.yml` workflow is removed from this branch; all offline tests and
+the documented `python -m unittest discover` command remain available.
+
+The checked-in `enabled`, `dispatch_authorized` and
+`dependency_license_review_complete` flags are true for the approved first
+bounded public matrix. This does not enable repository Actions or dispatch a
+run: both operations remain with the coordinator. The sole workflow allowlist
+is `java-sdk-evaluation.yml`; inherited workflow configuration is unchanged here.
 
 Standard labels were rechecked against the public
 [GitHub-hosted runners reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
@@ -249,12 +256,21 @@ rejects bundled natives/models, and caps each lane at 9,000,000 uncompressed byt
 (five lanes under 50 MB/run, including inventories). Retention is seven days.
 There is no Actions cache; corpus archives, models and full runtimes must not be
 uploaded. Any later cache requires license review and a total below 10 GB.
-Do not enable inherited workflows. Later enablement must allowlist only the approved
-Java workflow(s); prerelease publication and actual CI require separate permission.
+Do not enable inherited workflows. Repository activation must allowlist only
+`java-sdk-evaluation.yml`; prerelease publication is not authorized.
 
-**Next dependency:** coordinator reviews the bound workflow and fresh d094 evidence,
-resolves explicit model-download license acceptance, safely registers the workflow
-on the default branch, allowlists only the intended workflow(s), and authorizes
-dispatch. `workflow_dispatch` is not available merely because a workflow exists on
+Operational evaluation-use review is complete for explicit public downloads in
+this bounded, attributed English ASR run, not production deployment, redistribution,
+or legal signoff. The exact model LICENSE/NOTICES, NVIDIA Open Model License
+use grant2.2 and accompanying trustworthy-AI terms, and OpenMDW1.1 were reviewed
+by the coordinator. The catalog/card/packaged-notice discrepancy remains unresolved;
+do not call all weights MIT. Retain all applicable notices; model/native
+redistribution remains unauthorized. See `model.license_review` in `ci-lock.json`
+for the precise restrictions and public sources.
+
+**Next dependency:** coordinator inspects this readiness commit, safely configures
+the default branch, registers/allowlists only the approved workflow, activates
+repository Actions, and dispatches the first bounded matrix. `workflow_dispatch`
+is not available merely because a workflow exists on
 this feature branch: GitHub requires its registration on the default branch.
 No registration, enablement, dispatch, prerelease, issue or PR is performed here.

@@ -95,17 +95,21 @@ Rebuild diagnostics remain in `build/canonical-d094/`. None was uploaded.
 
 ## Remaining coordinator gates
 
-All five standard native JDK17 hosted lanes remain unrun. Actions, dispatch
-authorization and dependency-license approval remain false. Only the
-source-refresh gate is cleared; the old06bf evidence remains separate.
-Model/native redistribution is not authorized, and the documented model-license
-description/card/notices discrepancy still requires review.
+All five standard native JDK17 hosted lanes remain unrun. The coordinator has
+approved source-side readiness and operational evaluation-use licensing for the
+first bounded public matrix. The three readiness flags are true; source refresh
+remains cleared. Repository Actions is still disabled and no run was dispatched.
+The old06bf evidence remains separate. Model/native redistribution and production
+deployment are not authorized. The catalog/card/packaged-notice discrepancy is
+preserved rather than relabeled as all-MIT weights; exact scope and reviewed
+public sources are recorded in `model.license_review` in `ci-lock.json`.
 
-The coordinator must review the fresh evidence and license conditions, safely
-register only the approved workflow on default `main`, keep inherited workflows
-disabled, narrowly allowlist/activate the approved workflow, and explicitly
-authorize dispatch. No default-branch, settings, issue, PR, release or dispatch
-mutation was made here. After those approvals, the first full-matrix inputs are:
+The sole hosted allowlist is `java-sdk-evaluation.yml`; the unapproved automatic
+unit workflow is removed while all offline tests remain. The coordinator alone
+handles default-main configuration, workflow registration, narrow activation
+and the first dispatch. No inherited workflow, default-branch, repository setting,
+issue, PR, release or dispatch mutation was made here. The approved first-matrix
+inputs, for coordinator execution after activation, are:
 
 ```powershell
 gh workflow run java-sdk-evaluation.yml --repo jiec-msft/foundry-local `
