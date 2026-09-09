@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "status": "QUALIFIED_BINARY_TARGET_CONSUMER_PENDING_FINAL_METADATA_AND_DISPATCH",
+  "status": "QUALIFIED_BINARY_FINAL_METADATA_PENDING_COORDINATOR_MATRIX",
   "baseline_sha": "afdb275c0b79f77dbbd1c901de235bfea124441d",
   "sdk_git_sha": "d0946a0764d9cfa4b3d684940d6d5c66165427b8",
-  "metadata_git_sha": "38bbca7f4943687cd90d4aecc365424bb914957e",
+  "metadata_git_sha": "22ebea63b07addb526a1792e0303ba2f572f444a",
   "metadata_provenance": {
     "files": ["../model-target-lock.json", "../model-target-lock.schema.json", "../scripts/model_lock.py"],
     "verification": "Read and consume exact immutable Git blobs after independent binary/metadata source drift checks.",
     "schema_validator": "Existing PowerShell Test-Json, JSON Schema2020-12; no dependency download.",
-    "pending": "38bb still rejects linux-arm64 and osx-arm64. Await final reviewed SDK metadata revision; no further dispatch authorized."
+    "pending": "All five reviewed inventories are selectable. Non-Windows ASR still requires actual native qualification; only the coordinator may execute the remaining matrix."
   },
   "sdk_qualification": {
     "sdk_git_sha": "d0946a0764d9cfa4b3d684940d6d5c66165427b8",

@@ -336,3 +336,61 @@ this consumer continuation. Checked-in dispatch authorization is false.
 The next dependency is the coordinator's final reviewed metadata revision,
 followed by separately authorized qualification. The remaining full-matrix
 budget is one; none of the three diagnostics should be duplicated.
+
+## Final metadata22eb source readiness
+
+The final reviewed metadata revision
+`22ebea63b07addb526a1792e0303ba2f572f444a` was merged without conflicts at
+`9386ddd9b1ebd34e09bce67407cfbcbeea6d4c2f`. Relative to38bb, only the sidecar,
+`MODEL_LOCK.md`, SDK `README.md` and pure metadata tests changed. The schema,
+selector implementation, legacy model lock and all binary-producing source
+are unchanged. No SDK-owned file was manually edited.
+
+The active evaluator metadata pin now advances to22eb; the binary pin remains
+`d0946a0764d9cfa4b3d684940d6d5c66165427b8` and the qualified JAR remains64,000
+bytes with SHA256
+`bf644d3127afff912683731094821a8f6a751f003c284a9c15ddceaecebe0863`.
+Both Windows inventories remain unchanged. The three non-Windows selections
+retain their independently observed raw87-byte marker,793,344,449-byte total
+and complete manifest
+`8d02c1ffd0c9532751ef736ea5941c0733b2219c15ec68c038063dada7e29b8a`.
+All16 raw size/hash checks remain mandatory; downloaded bytes are not rewritten
+or normalized. Unknown transfer bytes remain null with an explicit reason.
+
+All five actual metadata selections and five synthetic raw-file inventories
+pass the focused offline checks. Explicitly simulated unobserved entries still
+reject, including preparation before downloads and integration before native
+CLI launch. Unknown/native-RID aliases reject. Previous38bb metadata pins,
+binary-source drift and metadata-blob drift also reject. Schema and selector
+Git-blob equality with38bb is checked independently of the mutable worktree.
+The combined existing suite passes69 tests:56 evaluator and13 SDK metadata.
+
+### Hosted schema-tool availability
+
+On2026-09-10, the public image manifests linked by the retained run logs were
+inspected for the newly required PowerShell schema validator:
+
+| Standard target | Observed public image version | Included PowerShell | Public image manifest |
+|---|---|---|---|
+| windows-2022 x64 | 20260907.297.1 | 7.6.5 | [Windows2022](https://github.com/actions/runner-images/blob/win22/20260907.297/images/windows/Windows2022-Readme.md) |
+| windows-11-arm ARM64 | 20260830.155.1 | 7.6.4 | [Windows11 ARM64](https://github.com/actions/runner-images/blob/win11-arm64/20260830.155/images/windows/Windows11-Arm64-Readme.md) |
+| ubuntu-24.04 x64 | 20260907.300.1 | 7.6.5 | [Ubuntu2404](https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md) |
+| ubuntu-24.04-arm ARM64 | 20260831.111.1 | 7.6.5 | [Ubuntu2404 ARM64](https://github.com/actions/runner-images/blob/ubuntu24-arm64/20260831.111/images/ubuntu/Ubuntu2404-Arm64-Readme.md) |
+| macos-15 ARM64 | 20260829.0321.1 | 7.6.4 | [macOS15 ARM64](https://github.com/actions/runner-images/blob/macos-15-arm64/20260829.0321/images/macos/macos-15-arm64-Readme.md) |
+
+Existing public job logs also record actual `pwsh` use on each image.
+The official [Test-Json reference](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/test-json?view=powershell-7.6)
+documents the built-in `Microsoft.PowerShell.Utility` cmdlet on Windows,
+Linux and macOS, its `-Json`/`-Schema` parameters, and JsonSchema.NET validation
+since PowerShell7.4. No extra module, installation or CI probe is required.
+Hosted image labels can advance; these inspected snapshots establish tool
+availability, not execution of the new validator on a future image. The actual
+schema check remains mandatory and has no missing-tool fallback.
+
+The checked-in dispatch flag is true under final-source-readiness approval,
+not execution permission for this evaluator. All other identity, source/hash,
+licensing, explicit-download, cleanup, artifact and budget gates remain intact.
+No new Java/Maven/native/model run or hosted dispatch occurred. Historical
+Windows smoke stays separate; the three non-Windows targets still need actual
+native ASR. The coordinator must review this source before executing the one
+remaining full matrix; the three completed diagnostics must not be duplicated.

@@ -19,6 +19,7 @@ from model_inventory import METADATA_FILES, METADATA_SHA, SDK, SDK_SHA, ModelMet
 
 ROOT = Path(__file__).resolve().parent
 BUILD = ROOT / "build" / "TestResults"
+RIDS = ("win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-arm64")
 
 
 def inventory_tuple(files):
@@ -50,7 +51,7 @@ class MetadataConsumerTests(unittest.TestCase):
             if target["status"] == "unobserved":
                 continue
             data = contents["inference_model.json"]
-            if rid == "linux-x64":
+            if not rid.startswith("win-"):
                 data = data.replace(b"\r\n", b"\n")
             marker = {"name": "inference_model.json", "bytes": len(data),
                       "sha256": hashlib.sha256(data).hexdigest()}
@@ -60,18 +61,29 @@ class MetadataConsumerTests(unittest.TestCase):
         return ModelMetadata(base, targets, self.metadata.selector, self.metadata.file_hashes), contents
 
     def test_exact_reviewed_selections_and_git_blob_hashes(self):
-        for rid in ("win-x64", "win-arm64", "linux-x64"):
+        for rid in RIDS:
             selected = self.metadata.select(rid)
             self.assertEqual(rid, selected["inventoryTarget"])
             self.assertEqual(16, len(selected["files"]))
-            self.assertEqual(793344449 if rid == "linux-x64" else 793344452, selected["installedBytes"])
-        for rid in ("linux-arm64", "osx-arm64", "windows-x64", "macos-arm64"):
+            self.assertEqual(793344452 if rid.startswith("win-") else 793344449, selected["installedBytes"])
+            if rid.startswith("win-"):
+                selected.pop("inventoryTarget")
+                self.assertEqual(self.metadata.base, selected)
+            else:
+                self.assertEqual("8d02c1ffd0c9532751ef736ea5941c0733b2219c15ec68c038063dada7e29b8a",
+                                 selected["manifestSha256"])
+        for rid in (None, "linux", "linux-riscv64", "osx-x64", "windows-x64", "macos-arm64"):
             with self.subTest(rid=rid), self.assertRaises(ValueError):
                 self.metadata.select(rid)
         for name in METADATA_FILES:
             raw = subprocess.check_output(["git", "show", f"{METADATA_SHA}:sdk_v2/java/{name}"],
                                           cwd=SDK.parents[1])
             self.assertEqual(hashlib.sha256(raw).hexdigest(), self.metadata.file_hashes[name])
+            if name != "model-target-lock.json":
+                previous = subprocess.check_output([
+                    "git", "show", f"38bbca7f4943687cd90d4aecc365424bb914957e:sdk_v2/java/{name}"
+                ], cwd=SDK.parents[1])
+                self.assertEqual(previous, raw)
 
     def test_actual_schema_rejects_fields_the_selector_does_not_validate(self):
         targets = copy.deepcopy(self.metadata.targets)
@@ -79,20 +91,20 @@ class MetadataConsumerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "JSON Schema"):
             model_inventory.validate_target_schema(targets, self.schema)
         targets = copy.deepcopy(self.metadata.targets)
-        targets["targets"]["linux-arm64"]["generatedMarker"] = targets["targets"]["linux-x64"]["generatedMarker"]
+        targets["targets"]["linux-arm64"]["status"] = "unobserved"
         with self.assertRaisesRegex(ValueError, "JSON Schema"):
             model_inventory.validate_target_schema(targets, self.schema)
 
     def test_raw_target_bytes_and_all_file_mismatch_evidence(self):
         metadata, contents = self.synthetic()
-        for rid in ("win-x64", "win-arm64", "linux-x64"):
+        for rid in RIDS:
             with self.subTest(rid=rid), tempfile.TemporaryDirectory(dir=BUILD) as directory:
                 root = Path(directory)
                 cache = root / "cache"
                 cache.mkdir()
                 selected = metadata.select(rid)
                 for name, raw in contents.items():
-                    if name == "inference_model.json" and rid == "linux-x64":
+                    if name == "inference_model.json" and not rid.startswith("win-"):
                         raw = raw.replace(b"\r\n", b"\n")
                     (cache / name).write_bytes(raw)
                 evidence = root / "verification.json"
@@ -118,29 +130,33 @@ class MetadataConsumerTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     metadata.provenance(selected, installed + 1)
 
-    def test_synthetic_observed_arm_entries_do_not_promote_checked_in_metadata(self):
+    def test_synthetic_unobserved_entries_never_fall_back_to_observed_targets(self):
         metadata, _ = self.synthetic()
-        for rid in ("linux-arm64", "osx-arm64"):
-            metadata.targets["targets"][rid] = copy.deepcopy(metadata.targets["targets"]["linux-x64"])
-            self.assertEqual(rid, metadata.select(rid)["inventoryTarget"])
+        for rid in RIDS:
+            metadata.targets["targets"][rid] = {"status": "unobserved"}
             with self.assertRaisesRegex(ValueError, "No reviewed observed"):
-                self.metadata.select(rid)
+                metadata.select(rid)
+            self.assertEqual(rid, self.metadata.select(rid)["inventoryTarget"])
 
     def test_unobserved_preparation_rejects_before_any_download(self):
         args = argparse.Namespace(target="linux-arm64")
+        metadata, _ = self.synthetic()
+        metadata.targets["targets"]["linux-arm64"] = {"status": "unobserved"}
         with patch("ci_prepare.host_identity", return_value=("linux", "arm64")), \
-                patch("ci_prepare.load_model_metadata", return_value=self.metadata), \
+                patch("ci_prepare.load_model_metadata", return_value=metadata), \
                 patch("ci_prepare.download") as download:
             with self.assertRaisesRegex(ValueError, "No reviewed observed"):
                 ci_prepare.prepare(args)
             download.assert_not_called()
 
     def test_native_integration_selects_verified_rid_before_native_cli(self):
+        metadata, _ = self.synthetic()
+        metadata.targets["targets"]["linux-arm64"] = {"status": "unobserved"}
         with tempfile.TemporaryDirectory(dir=BUILD) as directory:
             command = ["integration.py", "--java", "not-java", "--jar", "not-jar", "--runtime-dir", "not-runtime",
                        "--cache-dir", "not-cache", "--output", str(Path(directory) / "run"), "--target", "linux-arm64"]
             with patch.object(sys, "argv", command), \
-                    patch("integration.load_model_metadata", return_value=self.metadata), \
+                    patch("integration.load_model_metadata", return_value=metadata), \
                     patch("integration.verify_artifacts", return_value=({}, "linux-arm64", {})), \
                     patch("integration.run_cli") as launch:
                 with self.assertRaisesRegex(ValueError, "No reviewed observed"):
@@ -148,7 +164,7 @@ class MetadataConsumerTests(unittest.TestCase):
                 launch.assert_not_called()
 
     def test_wrong_metadata_revision_rejects_before_source_or_schema_execution(self):
-        for pin in (None, SDK_SHA, "f" * 40):
+        for pin in (None, SDK_SHA, "38bbca7f4943687cd90d4aecc365424bb914957e", "f" * 40):
             with self.subTest(pin=pin), patch("model_inventory.subprocess.run") as execute:
                 with self.assertRaisesRegex(ValueError, "Metadata SHA"):
                     load_model_metadata({**self.contract, "metadata_git_sha": pin})

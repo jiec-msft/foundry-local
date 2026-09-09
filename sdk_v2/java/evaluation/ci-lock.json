@@ -5,7 +5,7 @@
   "owner": "jiec-msft",
   "allowed_ref": "refs/heads/mason/java-asr-evaluation",
   "sdk_git_sha": "d0946a0764d9cfa4b3d684940d6d5c66165427b8",
-  "metadata_git_sha": "38bbca7f4943687cd90d4aecc365424bb914957e",
+  "metadata_git_sha": "22ebea63b07addb526a1792e0303ba2f572f444a",
   "source_pin_refresh_required": false,
   "local_windows_evidence": {
     "sdk_git_sha": "d0946a0764d9cfa4b3d684940d6d5c66165427b8",
@@ -44,7 +44,7 @@
     "model_transfer_bytes": null,
     "end_to_end_readiness": null
   },
-  "dispatch_authorized": false,
+  "dispatch_authorized": true,
   "ci_lane_status": {
     "windows-x64": "not_run",
     "windows-arm64": "not_run",

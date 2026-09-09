@@ -9,7 +9,7 @@ import types
 
 SDK = Path(__file__).resolve().parent.parent
 SDK_SHA = "d0946a0764d9cfa4b3d684940d6d5c66165427b8"
-METADATA_SHA = "38bbca7f4943687cd90d4aecc365424bb914957e"
+METADATA_SHA = "22ebea63b07addb526a1792e0303ba2f572f444a"
 METADATA_FILES = ("model-target-lock.json", "model-target-lock.schema.json", "scripts/model_lock.py")
 BINARY_SOURCE_PATHS = (
     "sdk_v2/java/pom.xml", "sdk_v2/java/src", "sdk_v2/java/THIRD_PARTY_NOTICES.md",

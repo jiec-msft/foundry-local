@@ -12,7 +12,7 @@ from collections import Counter
 from pathlib import Path
 
 from ci import previous_full_count, validate_dispatch
-from model_inventory import METADATA_SHA
+from model_inventory import METADATA_SHA, load_model_metadata
 from platform_checks import assert_identities, assert_supported, native_identity, normalize_arch
 from prepare_fixtures import flac_streaminfo
 from stage_artifacts import stage, stage_failure
@@ -140,9 +140,9 @@ class GateTests(unittest.TestCase):
 
     def test_checked_in_readiness_lock_is_coherent(self):
         sdk_sha = "d0946a0764d9cfa4b3d684940d6d5c66165427b8"
-        for gate in ("enabled", "integration_adapter_ready", "dependency_license_review_complete"):
+        for gate in ("enabled", "dispatch_authorized", "integration_adapter_ready", "dependency_license_review_complete"):
             self.assertIs(self.lock[gate], True)
-        self.assertIs(self.lock["dispatch_authorized"], False)
+        self.assertEqual("22ebea63b07addb526a1792e0303ba2f572f444a", METADATA_SHA)
         self.assertEqual(METADATA_SHA, self.lock["metadata_git_sha"])
         self.assertEqual(METADATA_SHA, self.contract["metadata_git_sha"])
         self.assertIs(self.lock["source_pin_refresh_required"], False)
@@ -159,8 +159,11 @@ class GateTests(unittest.TestCase):
         self.assertEqual({target["id"] for target in self.contract["supported_targets"]},
                          set(self.lock["ci_lane_status"]))
         self.assertEqual({"not_run"}, set(self.lock["ci_lane_status"].values()))
-        with self.assertRaisesRegex(ValueError, "BLOCKED"):
-            validate_dispatch(self.lock, self.contract, {**self.context, "sdk_sha": sdk_sha}, 0)
+        matrix = validate_dispatch(self.lock, self.contract, {**self.context, "sdk_sha": sdk_sha}, 1)
+        self.assertEqual(5, len(matrix))
+        metadata = load_model_metadata(self.contract)
+        for target in matrix:
+            self.assertEqual(target["rid"], metadata.select(target["rid"])["inventoryTarget"])
         workflows = ROOT.parents[2] / ".github" / "workflows"
         self.assertEqual(["java-sdk-evaluation.yml"], sorted(p.name for p in workflows.glob("java-sdk*.yml")))
 

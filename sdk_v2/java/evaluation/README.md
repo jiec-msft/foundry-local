@@ -204,7 +204,7 @@ to the coordinator/SDK worker, not this directory.
 ## Independently pinned target metadata
 
 The reviewed external SDK contract is merged at
-`38bbca7f4943687cd90d4aecc365424bb914957e` and pinned separately as
+`22ebea63b07addb526a1792e0303ba2f572f444a` and pinned separately as
 `metadata_git_sha` in both CI locks and `model_inventory.py`. Binary source
 remains `d0946a0764d9cfa4b3d684940d6d5c66165427b8`; its64,000-byte JAR hash,
 Java17 bytecode, legacy `model-lock.json` and complete existing binary-source
@@ -226,13 +226,16 @@ its selection rules. All16 actual files, including the raw generated marker,
 must match selected sizes/hashes, complete ordinal manifest and total bytes.
 Failure evidence retains those comparisons, RID and metadata revision.
 
-At the pinned38bb revision, `win-x64`, `win-arm64` and `linux-x64` are observed.
-**`linux-arm64` and `osx-arm64` still reject as unobserved**, despite the later
-diagnostic observations recorded here. Only the SDK owner can update that
-contract; no evaluator fallback or automatic promotion is permitted. The
-current consumer has offline coverage only, not a new native qualification.
+At the pinned22eb revision, all five exact RIDs are observed: `win-x64`,
+`win-arm64`, `linux-x64`, `linux-arm64` and `osx-arm64`. The two Windows
+inventories remain byte-for-byte equivalent to the legacy base lock. Each
+non-Windows inventory uses its separately observed87-byte LF marker,
+793,344,449-byte total and complete `8d02c1ff...` manifest. Only the SDK owner
+updates that contract; no evaluator fallback or automatic promotion is
+permitted. Unknown RIDs and simulated unobserved entries still reject before
+downloads or inference. **Inventory readiness is not native ASR qualification.**
 
-## First hosted matrix and remaining integrity gate
+## First hosted matrix and final source readiness
 
 The sole approved hosted workflow is `java-sdk-evaluation.yml`; model evaluation is
 **workflow_dispatch only**, owner/repository/ref guarded, and fails closed against
@@ -242,9 +245,11 @@ is evidence that an ASR model ran on a hosted target. The automatic
 `java-sdk-unit.yml` workflow is removed from this branch; all offline tests and
 the documented `python -m unittest discover` command remain available.
 
-The checked-in `enabled` and `dependency_license_review_complete` flags retain
-the reviewed preparation state; `dispatch_authorized` is now **false** because
-no new run is authorized. Current metadata also blocks the two unobserved RIDs.
+The checked-in `enabled`, `dispatch_authorized` and
+`dependency_license_review_complete` flags are **true** for the reviewed final
+source preparation. `source_pin_refresh_required` remains false. This permits
+coordinator review of source eligible for the one remaining standard full matrix;
+it neither executes a run nor authorizes this evaluator to dispatch.
 Repository operations remain with the coordinator. The sole workflow allowlist
 is `java-sdk-evaluation.yml`; inherited workflow configuration is unchanged here.
 
@@ -259,6 +264,12 @@ on 2026-09-09:
 | Linux x64 | ubuntu-24.04 | x64 |
 | Linux ARM64 | ubuntu-24.04-arm | arm64 |
 | macOS ARM64 | macos-15 | arm64 |
+
+The exact public image manifests used by the completed runs list PowerShell
+7.6.4 or7.6.5 on all five targets, including Linux ARM64 and macOS ARM64.
+`Test-Json -Json ... -Schema ...` is a built-in cross-platform cmdlet; metadata
+validation installs no module and fails closed if the tool is unavailable.
+See [the per-image sources and limitations](D094_EVALUATION.md#final-metadata22eb-source-readiness).
 
 All five lanes have explicitly pinned **native JDK 17** downloads. Temurin 17
 has no Windows ARM64 artifact, but Microsoft publishes a native Windows ARM64
@@ -324,10 +335,23 @@ the same marker-only difference and complete manifest on each target; see
 [their individual evidence](D094_EVALUATION.md#arm64-diagnostic-inventories).
 All three diagnostics still failed before transcription.
 
-**Next dependency:** coordinator provides the final reviewed metadata SHA
-containing the separately observed ARM64 tuples. This consumer is complete at38bb
-and must remain fail-closed for its two unobserved entries until that handoff.
-Final metadata integration and any native/hosted qualification need new approval.
-One of the maximum two full matrices and three diagnostic single-lane dispatches
-have occurred; no more dispatches are authorized. This evaluator did not
-dispatch, rerun, change settings, normalize model files, or accept new hashes.
+**Next dependency:** coordinator reviews the final22eb consumer source and owns
+actual dispatch of the one remaining standard full matrix. One of the maximum
+two full matrices and three diagnostic single-lane dispatches have occurred;
+none should be duplicated. Linux x64/ARM64 and macOS ARM64 still require actual
+native ASR. This evaluator has not dispatched, rerun, changed settings, normalized
+model files, or accepted an unreviewed hash.
+
+From the repository root, the offline readiness check exercises the actual
+checked-in locks, immutable source/schema/selector and all five selections with
+one previous full matrix. It makes no GitHub request and launches no native SDK:
+
+```powershell
+python -B -m unittest discover -s sdk_v2\java\evaluation -p test_preparation.py -k checked_in_readiness_lock_is_coherent -v
+```
+
+The coordinator-only dispatch inputs for the remaining matrix are:
+
+```powershell
+gh workflow run java-sdk-evaluation.yml --repo jiec-msft/foundry-local --ref mason/java-asr-evaluation -f sdk_sha=d0946a0764d9cfa4b3d684940d6d5c66165427b8 -f lane=full-matrix
+```
