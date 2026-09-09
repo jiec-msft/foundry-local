@@ -263,6 +263,30 @@ class ArtifactTests(unittest.TestCase):
         self.assertFalse(failure["measurement_retained_locally"])
         self.assertEqual([], failure["processes"])
 
+    def test_failure_retains_only_model_integrity_metadata(self):
+        metadata = {
+            "status": "mismatch", "expected_manifest_sha256": "a" * 64, "actual_manifest_sha256": "b" * 64,
+            "raw_error": "C:\\Users\\example\\model",
+            "files": [{
+                "name": "inference_model.json", "expected_bytes": 90, "actual_bytes": 87,
+                "expected_sha256": "c" * 64, "actual_sha256": "d" * 64, "matched": False,
+                "contents": "Never export model contents",
+            }],
+        }
+        (self.source / "model-verification.json").write_text(json.dumps(metadata), encoding="utf-8")
+        destination = self.root / "model-failure"
+        stage_failure(self.source, destination)
+        failure = json.loads((destination / "failure.json").read_text())
+        self.assertEqual("incomplete", failure["status"])
+        recorded = failure["model_verification"]
+        self.assertEqual("d" * 64, recorded["files"][0]["actual_sha256"])
+        self.assertNotIn("raw_error", recorded)
+        self.assertNotIn("contents", recorded["files"][0])
+        metadata["files"][0]["name"] = "C:\\Users\\example\\model"
+        (self.source / "model-verification.json").write_text(json.dumps(metadata), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "privacy"):
+            stage_failure(self.source, self.root / "unsafe-failure")
+
 
 if __name__ == "__main__":
     unittest.main()

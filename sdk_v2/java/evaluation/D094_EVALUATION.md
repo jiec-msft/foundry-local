@@ -93,31 +93,95 @@ Rebuild diagnostics remain in `build/canonical-d094/`. None was uploaded.
 | events.jsonl | `3e5b624927514d70e2289fc19f06cfe461fcc96560eea2e31d1126561587dc4a` |
 | platform.json | `776d6e0d74512d87ae7e065785dda0ca7028f61802542b8cb16b8f49c14e21ca` |
 
-## Remaining coordinator gates
+## First hosted matrix
 
-All five standard native JDK17 hosted lanes remain unrun. The coordinator has
-approved source-side readiness and operational evaluation-use licensing for the
-first bounded public matrix. The three readiness flags are true; source refresh
-remains cleared. Repository Actions is still disabled and no run was dispatched.
-The old06bf evidence remains separate. Model/native redistribution and production
-deployment are not authorized. The catalog/card/packaged-notice discrepancy is
-preserved rather than relabeled as all-MIT weights; exact scope and reviewed
-public sources are recorded in `model.license_review` in `ci-lock.json`.
+The coordinator dispatched
+[run34396100361](https://github.com/jiec-msft/foundry-local/actions/runs/34396100361)
+exactly once, executing `b14d37fdc848777b1ff744a5d960e3940c3d3aae` with the same
+qualified SDK source/JAR above. It ran from 2026-09-09T19:36:49Z through
+19:42:20Z and concluded **failure**. This section is hosted evidence, not a
+replacement or relabeling of the preceding local measurements.
 
-The sole hosted allowlist is `java-sdk-evaluation.yml`; the unapproved automatic
-unit workflow is removed while all offline tests remain. The coordinator alone
-handles default-main configuration, workflow registration, narrow activation
-and the first dispatch. No inherited workflow, default-branch, repository setting,
-issue, PR, release or dispatch mutation was made here. The approved first-matrix
-inputs, for coordinator execution after activation, are:
+| Job/lane | Actual outcome |
+|---|---|
+| authorize | Passed owner/ref/source/license/budget gates |
+| build-sdk | Reproduced the exact 64,000-byte qualified JAR; Java17 bytecode |
+| windows-2022 x64 | Native10WAV +10paced +cancel/cleanup passed |
+| windows-11-arm ARM64 | Native10WAV +10paced +cancel/cleanup passed |
+| ubuntu-24.04 x64 | Native identify/prepare exited0; model hash gate failed before ASR |
+| ubuntu-24.04-arm ARM64 | Native identify/prepare exited0; model hash gate failed before ASR |
+| macos-15 ARM64 | Native identify/prepare exited0; model hash gate failed before ASR |
 
-```powershell
-gh workflow run java-sdk-evaluation.yml --repo jiec-msft/foundry-local `
-  --ref mason/java-asr-evaluation `
-  -f sdk_sha=d0946a0764d9cfa4b3d684940d6d5c66165427b8 -f lane=full-matrix
-```
+Every lane ran preparation and entered the integration step; none was skipped.
+The three failures occurred after native/JVM architecture and runtime identity
+checks, at `verify_model`, not in the builder or tool/native preparation.
+Their exported failure records contain only identify/prepare success and an
+explicit incomplete status; no transcripts or complete measurements exist for
+those lanes. They are **not** native ASR successes.
 
-At most two full matrices are allowed, with max-parallel2 and20 minutes per job.
-A failed-lane dispatch requires its exact `lane`, prior `failed_run_id`, reviewed
-descendant `fix_sha`, and concrete `fix_reason`; whole-run retries are rejected.
-No new local inference is requested by this handoff.
+Both Windows artifacts contain23 successful CLI process records and1353
+strictUTF8/schema-valid events, including request/model/manager cleanup and no
+inference children. Actual host/JVM/native architecture matches each runner.
+x64 uses Eclipse Adoptium17.0.20.1+1; ARM64 uses Microsoft17.0.20.1+1-LTS.
+Native file hashes, runtime2.0.1/API1, CPU model identity and installed-file
+manifest match the locks. Independent rescoring reproduces **8/151 edits
+(5.298%)** in each mode and lane:5 substitutions,0 deletions,3 insertions;
+dev-clean3/62 and dev-other5/89.
+
+| Hosted metric | Windows x64 | Windows ARM64 |
+|---|---|---|
+| First-nonempty latency range, ms | 1304.7034-2419.4457 | 1274.8833-2394.2361 |
+| Finalization latency range, ms | 209.3097-329.6811 | 187.7381-278.9533 |
+| Paced RTF range | 1.022319-1.074251 | 1.019370-1.063078 |
+| Cancellation acknowledgment, ms | 106.3618 | 85.3720 |
+| Root JVM peak RSS, bytes | 1,040,027,648 | 1,012,781,056 |
+| Report bundle including inventory, bytes | 225,964 | 225,833 |
+
+Readiness and actual network-transfer bytes remain unknown with reasons. Artifact
+storage sizes are not network-transfer measurements. Six artifacts total107,763
+API-reported compressed bytes and517,336 extracted payload bytes, with seven-day
+retention. They contain only the thin JAR, two successful small evidence bundles,
+and three513-byte failure records; no model/runtime/corpus archives.
+
+| Hosted evidence | SHA256 |
+|---|---|
+| Windows x64 report.json | `b0dc9c3f2d7c64ff5ce065907dd5499708f1818e7e0e671b32c8228f6ca04889` |
+| Windows x64 measurement.json | `d902abbc0b8a85228e730bf0bb6a61bd6e686465fe705c7e01206cfd268ebcfc` |
+| Windows x64 events.jsonl | `dc733af32b2ae184dd9ff3008daf2904caf222678057e252ef4bcfe11ff5b684` |
+| Windows ARM64 report.json | `349d75f76b0a82f759a328349190adf401654f58297b06c6b3995279b6cc8cfe` |
+| Windows ARM64 measurement.json | `023e33adc9cef97fa199313e675fa54ee3f7e453218b4d1cb5648523e78d81b5` |
+| Windows ARM64 events.jsonl | `6acf2f8547460e57993c89e2bfd0ffdbf47b56aba219f2c33a8d0568ba9a46f2` |
+| Each incomplete failure.json | `7f37c0cbc04a3b69fa0b73351517ffd3716443c15dddcfa8a129796c35ec3e72` |
+
+### Failure diagnosis and next gate
+
+All three failures report `Pinned model hash/size mismatch: inference_model.json`.
+The public `sdk_v2/cpp/src/download/inference_model_writer.cc` writes this
+generated cache marker through a text-mode stream. Independently reproducing its
+two-field JSON with the locked model ID and null prompt template gives exactly
+the Windows pin:90 CRLF bytes, SHA256
+`881e9c5b34349dabe826cf88857835d15623c1a92a311d002812c399fe1128ef`.
+The LF serialization is87 bytes, SHA256
+`9bb2dbe6766fb9a5e3e1c8407a88141a480363d0aca7d4df4f88aa3e0399adeb`.
+This is a source-supported platform-line-ending hypothesis, **not an observation
+of the failed runners' files**: the first-run artifacts omitted actual mismatch
+sizes/hashes. The packaged API1 binary is not qualified by newer public source
+alone. Files sorted after the marker were not reached by the old verifier.
+
+The diagnostic fix records every locked file's observed size/SHA256 and the
+actual manifest digest before rejecting a mismatch; failure staging exports only
+that bounded integrity metadata. Offline regressions retain rejection of LF
+versus CRLF, altered manifests and unsafe output paths. No pin was changed,
+normalization accepted, model content uploaded, or SDK source modified. This
+fix improves diagnosis; it does **not** make the three failed lanes qualified.
+
+Coordinator review is required before further hosted work or any portable
+generated-marker lock change. One of at most two full matrices is consumed;
+failed-lane dispatches require `failed_run_id=34396100361`, exact failed `lane`,
+reviewed descendant `fix_sha` and concrete `fix_reason`. No rerun/dispatch,
+repository setting, default-main, PR or release mutation was made by this
+evaluator. No local native, build or model-download work occurred during observation.
+Evaluation-only license scope and the unresolved catalog/card/notices discrepancy
+remain unchanged; model/native redistribution and production deployment are
+not authorized. This ten-utterance smoke makes no product-quality, plugin,
+microphone or hardware-generation coverage claim.

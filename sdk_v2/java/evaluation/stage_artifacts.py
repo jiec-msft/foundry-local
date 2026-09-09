@@ -35,6 +35,20 @@ def stage_failure(source, destination):
         "measurement_retained_locally": (source / "measurement.json").exists(),
         "raw_error_messages": "Not exported because native diagnostics can contain machine-specific paths.",
     }
+    verification_path = source / "model-verification.json"
+    if verification_path.exists():
+        verification = json.loads(verification_path.read_text(encoding="utf-8"))
+        # Export only integrity metadata, never model contents or raw diagnostics.
+        failure["model_verification"] = {
+            key: verification[key]
+            for key in ("status", "expected_manifest_sha256", "actual_manifest_sha256")
+        }
+        failure["model_verification"]["files"] = [
+            {key: item[key] for key in (
+                "name", "expected_bytes", "actual_bytes", "expected_sha256", "actual_sha256", "matched"
+            )}
+            for item in verification["files"]
+        ]
     data = (json.dumps(failure, indent=2) + "\n").encode("utf-8")
     if len(data) > LANE_LIMIT_BYTES or re.search(rb"(?<![A-Za-z])[A-Za-z]:[\\/]|/(?:Users|home|runner)/", data):
         raise ValueError("Failure evidence exceeds privacy or size limits")

@@ -194,7 +194,7 @@ The actual SDK [API](../API.md), [event schema](../cli.schema.json), model lock
 and bundled runtime/native locks are authoritative. SDK API/build changes belong
 to the coordinator/SDK worker, not this directory.
 
-## Source-side CI readiness; repository activation pending
+## First hosted matrix and remaining integrity gate
 
 The sole approved hosted workflow is `java-sdk-evaluation.yml`; model evaluation is
 **workflow_dispatch only**, owner/repository/ref guarded, and fails closed against
@@ -234,7 +234,11 @@ rebuild would change its bytes. The canonical Windows checkout therefore uses
 explicit CRLF text handling rather than modifying SDK source/resources or
 accepting a different JAR hash. Every native lane rechecks Java17 bytecode and
 JAR/JNA hashes. The isolated local offline rebuild reproduced the qualified bytes;
-the hosted builder and all five hosted native lanes remain unexecuted.
+the first hosted builder also reproduced them. In
+[run34396100361](https://github.com/jiec-msft/foundry-local/actions/runs/34396100361),
+Windows x64 and ARM64 completed actual native smoke. Linux x64/ARM64 and macOS
+ARM64 failed model-cache integrity verification before ASR; they are not qualified.
+See [the separate hosted evidence section](D094_EVALUATION.md#first-hosted-matrix).
 
 `platform_checks.py` compares actual host (including emulated-process cases),
 JVM properties and individual PE/ELF/Mach-O native machine headers. The adapter
@@ -256,6 +260,9 @@ rejects bundled natives/models, and caps each lane at 9,000,000 uncompressed byt
 (five lanes under 50 MB/run, including inventories). Retention is seven days.
 There is no Actions cache; corpus archives, models and full runtimes must not be
 uploaded. Any later cache requires license review and a total below 10 GB.
+Failed model verification now retains only expected/observed file sizes and SHA256
+values, plus manifest digests, in bounded `failure.json`. It never uploads model
+contents or normalizes a mismatched file into acceptance.
 Do not enable inherited workflows. Repository activation must allowlist only
 `java-sdk-evaluation.yml`; prerelease publication is not authorized.
 
@@ -268,9 +275,8 @@ do not call all weights MIT. Retain all applicable notices; model/native
 redistribution remains unauthorized. See `model.license_review` in `ci-lock.json`
 for the precise restrictions and public sources.
 
-**Next dependency:** coordinator inspects this readiness commit, safely configures
-the default branch, registers/allowlists only the approved workflow, activates
-repository Actions, and dispatches the first bounded matrix. `workflow_dispatch`
-is not available merely because a workflow exists on
-this feature branch: GitHub requires its registration on the default branch.
-No registration, enablement, dispatch, prerelease, issue or PR is performed here.
+**Next dependency:** coordinator reviews the failed-lane integrity diagnostics and
+the generated-marker platform hypothesis before authorizing any further hosted
+work. The first matrix consumed one of the maximum two full dispatches. The
+coordinator already registered and activated only the approved manual workflow;
+this evaluator did not dispatch, rerun, change settings, or publish a release.

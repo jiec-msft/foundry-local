@@ -42,7 +42,7 @@ def unknown(reason):
     return {"value": None, "reason": reason}
 
 
-def verify_model(cache, lock):
+def verify_model(cache, lock, evidence_path=None):
     candidates = [path.parent for path in cache.rglob("genai_config.json")]
     matches = []
     for directory in candidates:
@@ -51,12 +51,32 @@ def verify_model(cache, lock):
     if len(matches) != 1:
         raise ValueError("Expected exactly one complete pinned model in the explicit cache")
     directory = matches[0]
-    lines = []
+    lines, actual_lines, files = [], [], []
     for item in sorted(lock["files"], key=lambda item: item["name"]):
         path = directory / item["name"]
-        if path.stat().st_size != item["bytes"] or sha256(path) != item["sha256"]:
-            raise ValueError(f"Pinned model hash/size mismatch: {item['name']}")
+        actual_bytes, actual_sha256 = path.stat().st_size, sha256(path)
+        files.append({
+            "name": item["name"], "expected_bytes": item["bytes"], "actual_bytes": actual_bytes,
+            "expected_sha256": item["sha256"], "actual_sha256": actual_sha256,
+            "matched": actual_bytes == item["bytes"] and actual_sha256 == item["sha256"],
+        })
         lines.append(f"{item['name']}\t{item['bytes']}\t{item['sha256']}\n")
+        actual_lines.append(f"{item['name']}\t{actual_bytes}\t{actual_sha256}\n")
+    mismatches = [item for item in files if not item["matched"]]
+    actual_manifest = hashlib.sha256("".join(actual_lines).encode()).hexdigest()
+    if evidence_path is not None:
+        save(evidence_path, {
+            "status": "mismatch" if mismatches or actual_manifest != lock["manifestSha256"] else "matched",
+            "expected_manifest_sha256": lock["manifestSha256"], "actual_manifest_sha256": actual_manifest,
+            "files": files,
+        })
+    if mismatches:
+        item = mismatches[0]
+        raise ValueError(
+            f"Pinned model hash/size mismatch: {item['name']}; "
+            f"expected {item['expected_bytes']} bytes SHA256 {item['expected_sha256']}; "
+            f"observed {item['actual_bytes']} bytes SHA256 {item['actual_sha256']}"
+        )
     if hashlib.sha256("".join(lines).encode()).hexdigest() != lock["manifestSha256"]:
         raise ValueError("Model manifest hash mismatch")
     return sum(item["bytes"] for item in lock["files"])
@@ -291,7 +311,7 @@ def main():
             prepared = invoke("prepare", "prepare", ["--explicit-download", "--accept-model-license"])
             if not event_once(prepared, "prepared")["cached"]:
                 raise ValueError("Explicit preparation did not produce a cached model")
-        installed = verify_model(args.cache_dir, model_lock)
+        installed = verify_model(args.cache_dir, model_lock, args.output / "model-verification.json")
         batch, paced = [], []
         for sample in manifest["samples"]:
             wav = str(ROOT / sample["wav_path"])

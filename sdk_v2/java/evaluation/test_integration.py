@@ -2,9 +2,13 @@
 """Offline contract checks only; these fixtures are not model evidence."""
 
 import copy
+import hashlib
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
-from integration import measured_sample, require_cleanup, unknown
+from integration import measured_sample, require_cleanup, unknown, verify_model
 from scorer import score_measurement
 from test_scorer import synthetic_manifest, synthetic_measurement
 
@@ -36,6 +40,38 @@ def version_two():
 
 
 class IntegrationContractTests(unittest.TestCase):
+    def test_model_mismatch_retains_actual_hashes_without_accepting_line_endings(self):
+        build = Path(__file__).resolve().parent / "build" / "TestResults"
+        build.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=build) as directory:
+            root = Path(directory)
+            cache = root / "model"
+            cache.mkdir()
+            contents = {"genai_config.json": b"{}", "inference_model.json": b'{\r\n  "unit": true\r\n}'}
+            files = []
+            for name, data in contents.items():
+                (cache / name).write_bytes(data)
+                files.append({"name": name, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
+            manifest = "".join(f"{item['name']}\t{item['bytes']}\t{item['sha256']}\n" for item in files)
+            lock = {"files": files, "manifestSha256": hashlib.sha256(manifest.encode()).hexdigest()}
+            evidence = root / "model-verification.json"
+            self.assertEqual(sum(map(len, contents.values())), verify_model(cache, lock, evidence))
+            self.assertEqual("matched", json.loads(evidence.read_text())["status"])
+            changed = contents["inference_model.json"].replace(b"\r\n", b"\n")
+            (cache / "inference_model.json").write_bytes(changed)
+            with self.assertRaisesRegex(ValueError, "Pinned model hash/size mismatch: inference_model.json"):
+                verify_model(cache, lock, evidence)
+            recorded = json.loads(evidence.read_text())
+            self.assertEqual("mismatch", recorded["status"])
+            self.assertEqual(hashlib.sha256(changed).hexdigest(), recorded["files"][1]["actual_sha256"])
+            self.assertEqual(len(changed), recorded["files"][1]["actual_bytes"])
+            self.assertTrue(recorded["files"][0]["matched"])
+            self.assertNotEqual(recorded["expected_manifest_sha256"], recorded["actual_manifest_sha256"])
+            (cache / "inference_model.json").write_bytes(contents["inference_model.json"])
+            lock["manifestSha256"] = "0" * 64
+            with self.assertRaisesRegex(ValueError, "Model manifest hash mismatch"):
+                verify_model(cache, lock, evidence)
+
     def test_unknown_measurements_preserve_reason_without_inventing_zero(self):
         measured = version_two()
         report = score_measurement(synthetic_manifest(), measured)
