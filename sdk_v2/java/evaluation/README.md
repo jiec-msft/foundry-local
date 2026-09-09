@@ -248,8 +248,9 @@ the documented `python -m unittest discover` command remain available.
 The checked-in `enabled`, `dispatch_authorized` and
 `dependency_license_review_complete` flags are **true** for the reviewed final
 source preparation. `source_pin_refresh_required` remains false. This permits
-coordinator review of source eligible for the one remaining standard full matrix;
-it neither executes a run nor authorizes this evaluator to dispatch.
+inspection of the prepared source; it neither executes a run nor authorizes
+this evaluator to dispatch. The second and final full matrix has now completed;
+the live run-history budget blocks another full matrix.
 Repository operations remain with the coordinator. The sole workflow allowlist
 is `java-sdk-evaluation.yml`; inherited workflow configuration is unchanged here.
 
@@ -286,8 +287,10 @@ JAR/JNA hashes. The isolated local offline rebuild reproduced the qualified byte
 the first hosted builder also reproduced them. In
 [run34396100361](https://github.com/jiec-msft/foundry-local/actions/runs/34396100361),
 Windows x64 and ARM64 completed actual native smoke. Linux x64/ARM64 and macOS
-ARM64 failed model-cache integrity verification before ASR; they are not qualified.
+ARM64 failed model-cache integrity verification before ASR in that first run.
 See [the separate hosted evidence section](D094_EVALUATION.md#first-hosted-matrix).
+The [second matrix outcome](SECOND_MATRIX_EVALUATION.md) records subsequent real
+native smoke on all five targets and its raw-inventory export limitation.
 
 `platform_checks.py` compares actual host (including emulated-process cases),
 JVM properties and individual PE/ELF/Mach-O native machine headers. The adapter
@@ -335,23 +338,23 @@ the same marker-only difference and complete manifest on each target; see
 [their individual evidence](D094_EVALUATION.md#arm64-diagnostic-inventories).
 All three diagnostics still failed before transcription.
 
-**Next dependency:** coordinator reviews the final22eb consumer source and owns
-actual dispatch of the one remaining standard full matrix. One of the maximum
-two full matrices and three diagnostic single-lane dispatches have occurred;
-none should be duplicated. Linux x64/ARM64 and macOS ARM64 still require actual
-native ASR. This evaluator has not dispatched, rerun, changed settings, normalized
-model files, or accepted an unreviewed hash.
+**Current outcome:** [run34411280765](SECOND_MATRIX_EVALUATION.md) completed
+ten WAVs, ten paced streams and cancellation/cleanup on each of five targets.
+Every target scored8/151 in each mode on the same fixed smoke corpus. The
+success artifacts omit observed per-file verification rows; the outcome report
+distinguishes the executed integrity gate and retained provenance from an
+independent replay of unavailable raw inventories.
 
-From the repository root, the offline readiness check exercises the actual
+**Both full matrices are consumed**, alongside three single-lane diagnostics.
+No more full matrices or other dispatches are authorized. This evaluator has not
+dispatched, rerun, changed settings, normalized model files or accepted an
+unreviewed hash. Coordinator review of the final evidence is the next dependency.
+
+From the repository root, this offline preparation check exercises the
 checked-in locks, immutable source/schema/selector and all five selections with
-one previous full matrix. It makes no GitHub request and launches no native SDK:
+the historical one-previous-matrix context. It is not a live budget check or
+permission for another run. It makes no GitHub request and launches no native SDK:
 
 ```powershell
 python -B -m unittest discover -s sdk_v2\java\evaluation -p test_preparation.py -k checked_in_readiness_lock_is_coherent -v
-```
-
-The coordinator-only dispatch inputs for the remaining matrix are:
-
-```powershell
-gh workflow run java-sdk-evaluation.yml --repo jiec-msft/foundry-local --ref mason/java-asr-evaluation -f sdk_sha=d0946a0764d9cfa4b3d684940d6d5c66165427b8 -f lane=full-matrix
 ```

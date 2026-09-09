@@ -394,3 +394,13 @@ No new Java/Maven/native/model run or hosted dispatch occurred. Historical
 Windows smoke stays separate; the three non-Windows targets still need actual
 native ASR. The coordinator must review this source before executing the one
 remaining full matrix; the three completed diagnostics must not be duplicated.
+
+## Second hosted matrix outcome
+
+[Run34411280765 and its separate evidence report](SECOND_MATRIX_EVALUATION.md)
+subsequently completed actual native smoke on all five standard targets.
+It executed07e40f0 with metadata22eb and the unchanged d094 JAR, not a later
+reporting commit. Each target scored8/151 in both modes and completed early
+cancellation/cleanup. The report explicitly records missing success-path raw
+per-file inventory exports rather than reusing earlier observations.
+The two-full-matrix budget is exhausted; no additional dispatch is authorized.
