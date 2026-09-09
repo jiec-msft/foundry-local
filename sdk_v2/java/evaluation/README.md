@@ -281,9 +281,13 @@ observed exactly the87-byte LF marker candidate; all15 other locked files matche
 It still failed before ASR. The complete observed manifest and a narrowly scoped
 target-specific generated-marker lock proposal are recorded in
 [the diagnostic evidence section](D094_EVALUATION.md#linux-x64-diagnostic-inventory).
-Linux ARM64/macOS ARM64 marker bytes remain unobserved.
+The separately retrieved Linux ARM64 and macOS ARM64 diagnostics now confirm
+the same marker-only difference and complete manifest on each target; see
+[their individual evidence](D094_EVALUATION.md#arm64-diagnostic-inventories).
+All three diagnostics still failed before transcription.
 
-**Next dependency:** coordinator/SDK owner reviews that proposal before any pin
-change or further hosted work. One of the maximum two full matrices and one
-diagnostic single-lane dispatch have occurred. This evaluator did not dispatch,
-rerun, change settings, normalize model files, or accept new hashes.
+**Next dependency:** coordinator supplies these observations to the SDK metadata
+owner, then provides the actual reviewed contract before evaluator integration.
+One of the maximum two full matrices and three diagnostic single-lane dispatches
+have occurred; no more dispatches are authorized. This evaluator did not
+dispatch, rerun, change settings, normalize model files, or accept new hashes.

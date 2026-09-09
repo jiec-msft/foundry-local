@@ -223,8 +223,9 @@ decimal size and SHA256 entries using the locked ordinal/TAB/LF method.
 The marker matches the exact LF candidate, supporting explanation1 on this
 Linux x64 run. Different marker fields (explanation2) are not supported by this
 digest, and additional differences among the16 locked files (explanation3) are
-falsified by the complete inventory. **Linux ARM64 and macOS ARM64 inventories
-have not been observed; their ASR coverage remains absent.**
+falsified by the complete inventory. At this diagnostic stage, Linux ARM64 and
+macOS ARM64 inventories had not yet been observed; their later observations
+are recorded separately below. Their ASR coverage remains absent.
 
 ### Proposed portable lock boundary, not implemented
 
@@ -244,3 +245,67 @@ was changed in this evidence-only continuation. Full-matrix count remains1of2,
 plus one diagnostic single-lane dispatch. Further implementation or hosted work
 requires a new coordinator decision; prior Windows native evidence and the
 first matrix's incomplete artifacts remain separate.
+
+## ARM64 diagnostic inventories
+
+Two separately dispatched diagnostics execute
+`b08a704a824fdfaeef33ccd7e670b90d3c404960`, with unchanged SDK source
+`d0946a0764d9cfa4b3d684940d6d5c66165427b8` and diagnostic fix
+`e7fa302b54fe410d762bd47965fcb7e39d4ff1b6`. Both were created at
+2026-09-09T20:28:49Z. Workflow concurrency serialized them; macOS waiting behind
+Linux was not a failure, cancellation or native skip.
+
+| Target and run | Native job | Runner image | Completed UTC | Outcome |
+|---|---|---|---|---|
+| [Linux ARM64,34401279833](https://github.com/jiec-msft/foundry-local/actions/runs/34401279833) | 102633818757 | ubuntu-24.04-arm | 20:30:17Z | Expected marker rejection before ASR |
+| [macOS ARM64,34401280998](https://github.com/jiec-msft/foundry-local/actions/runs/34401280998) | 102634290554 | macos-15-arm64 | 20:31:54Z | Expected marker rejection before ASR |
+
+Each run passed authorization, canonical build and explicit preparation. The
+executed adapter passed host/JVM/native architecture, native hashes and runtime/
+model identity checks before reaching `verify_model`; the checked native targets
+were `linux-arm64` and `osx-arm64`. Raw identity-event payloads are not included
+in failure artifacts, so they are not presented as separately recovered events.
+Each artifact records native identify and prepare exiting0 without timeout or
+error events. Each native integration step failed at the expected marker check;
+failure staging/upload succeeded. Success-artifact steps were conditionally
+skipped, not the native jobs. **Neither run performed transcription or provides
+ASR/cancellation/cleanup smoke qualification.**
+
+Both failure artifacts were separately retrieved and compared against all16
+entries in the unchanged model lock. Each independently reports the sole
+`inference_model.json` mismatch:87 bytes and SHA256
+`9bb2dbe6766fb9a5e3e1c8407a88141a480363d0aca7d4df4f88aa3e0399adeb`,
+versus the Windows90-byte/`881e9c5b...` pin. All15 other filenames, byte counts
+and hashes match, including every file after the marker.
+
+For **each target separately**, summing the observed locked-file sizes gives
+793,344,449 bytes. Recomputing the complete ordinal filename/TAB/size/TAB/SHA256/LF
+UTF8 manifest gives
+`8d02c1ffd0c9532751ef736ea5941c0733b2219c15ec68c038063dada7e29b8a`.
+The raw expected/observed per-file inventories remain in the following artifacts.
+Their payloads are byte-identical after independent retrieval, not copied from
+the Linux x64 evidence.
+
+| Target | Raw failure artifact | API-reported archive SHA256 |
+|---|---|---|
+| Linux ARM64 | [10123587055](https://github.com/jiec-msft/foundry-local/actions/runs/34401279833/artifacts/10123587055) | `17242805c3ec5dc34a2d21052666dd06b6cc314c37e0b21ca7b21b314238dac4` |
+| macOS ARM64 | [10123649414](https://github.com/jiec-msft/foundry-local/actions/runs/34401280998/artifacts/10123649414) | `b312a12a6d10851a2582ae370767f9bf3cdd030f8bb05160c9f0ee7c8d8bc935` |
+
+Each `failure.json` is6,034 bytes with SHA256
+`4c1f6c49793f28076c86753934e6e3c704e992d71e0451768f0ae2d70bdf2d45`;
+each archive is1,654 API-reported bytes with seven-day retention. These metadata
+artifacts contain no model/native payloads. No byte count is relabeled as
+measured network transfer.
+
+The marker-only explanation is now supported independently on Linux x64,
+Linux ARM64 and macOS ARM64. These additional observations are for the
+coordinator to provide to the SDK metadata owner; they do not approve a new pin
+or imply a metadata schema. Evaluation integration awaits the actual reviewed
+SDK metadata contract. No SDK/model-lock, evaluator code, binary source/hash,
+workflow, identity gate or repository policy changed here.
+
+Total budget consumed is **one of at most two full matrices plus three
+single-lane diagnostics**. No more dispatches are authorized. The local observer
+ran no Java/native/build/model/dependency work; its bounded macOS watcher exited
+after discovering completion, leaving no active owned process. Prior Windows
+native smoke and all preceding failure artifacts remain separate and unchanged.
