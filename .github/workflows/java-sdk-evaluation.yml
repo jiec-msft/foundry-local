@@ -1,0 +1,168 @@
+name: Java SDK ASR evaluation (authorization gated)
+run-name: Java ASR ${{ inputs.lane }} ${{ inputs.sdk_sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      sdk_sha:
+        description: Immutable SDK commit approved by coordinator
+        type: string
+        required: true
+      lane:
+        description: At most two full matrices; then only fixed failed lanes
+        type: choice
+        options: [full-matrix, windows-x64, windows-arm64, linux-x64, linux-arm64, macos-arm64]
+        required: true
+      fix_sha:
+        description: Concrete reviewed fix commit for a failed-lane dispatch
+        type: string
+      fix_reason:
+        description: Failure and concrete fix (required for a single lane)
+        type: string
+      failed_run_id:
+        description: Prior run containing the failed lane (single-lane dispatch only)
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: java-asr-evaluation-budget
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    if: >-
+      github.repository == 'jiec-msft/foundry-local' &&
+      github.actor == 'jiec-msft' &&
+      github.ref == 'refs/heads/mason/java-asr-evaluation'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.gate.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Read this workflow's complete run history for conservative budget counting
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p sdk_v2/java/evaluation/build
+          gh api --paginate --slurp \
+            "repos/jiec-msft/foundry-local/actions/workflows/java-sdk-evaluation.yml/runs?per_page=100" \
+            > sdk_v2/java/evaluation/build/workflow-runs.json
+      - name: Require fixed SDK, local Windows evidence and explicit dispatch authorization
+        id: gate
+        env:
+          SDK_SHA: ${{ inputs.sdk_sha }}
+          LANE: ${{ inputs.lane }}
+          FIX_SHA: ${{ inputs.fix_sha }}
+          FIX_REASON: ${{ inputs.fix_reason }}
+          FAILED_RUN_ID: ${{ inputs.failed_run_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 sdk_v2/java/evaluation/ci.py guard
+          --history sdk_v2/java/evaluation/build/workflow-runs.json
+          --output "$GITHUB_OUTPUT"
+  build-sdk:
+    if: github.run_attempt == 1
+    needs: authorize
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'true'
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Build the canonical Windows Java17 thin SDK and require its exact artifact hash
+        id: sdk
+        shell: pwsh
+        run: >-
+          python sdk_v2/java/evaluation/ci_prepare.py --target windows-x64
+          --output "$env:GITHUB_OUTPUT" --explicit-download --accept-native-licenses --build-only
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: java-asr-fixed-sdk
+          path: ${{ steps.sdk.outputs.jar }}
+          retention-days: 7
+          if-no-files-found: error
+
+  model:
+    name: model-${{ matrix.id }}
+    if: github.run_attempt == 1
+    needs: [authorize, build-sdk]
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.authorize.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: java-asr-fixed-sdk
+          path: sdk_v2/java/evaluation/build/ci/sdk
+      - name: Explicit pinned public JDK, reproducible SDK and native preparation
+        id: prepare
+        shell: pwsh
+        env:
+          TARGET: ${{ matrix.id }}
+        run: >-
+          python sdk_v2/java/evaluation/ci_prepare.py --target "$env:TARGET"
+          --output "$env:GITHUB_OUTPUT" --explicit-download --accept-native-licenses
+          --sdk-jar sdk_v2/java/evaluation/build/ci/sdk/foundry-local-java-0.1.0-poc.jar
+      - name: Ten WAVs, ten paced streams, cancellation and cleanup on native architecture
+        shell: pwsh
+        env:
+          TARGET: ${{ matrix.id }}
+          JAVA: ${{ steps.prepare.outputs.java }}
+          SDK_JAR: ${{ steps.prepare.outputs.jar }}
+          RUNTIME: ${{ steps.prepare.outputs.runtime }}
+          MODEL_CACHE: ${{ steps.prepare.outputs.model_cache }}
+          ORT_TELEMETRY_DISABLED: '1'
+        run: >-
+          python sdk_v2/java/evaluation/ci.py integration --target "$env:TARGET"
+          --java "$env:JAVA" --jar "$env:SDK_JAR" --runtime-dir "$env:RUNTIME"
+          --cache-dir "$env:MODEL_CACHE" --output sdk_v2/java/evaluation/build/results
+          --prepare --accept-model-license
+      - name: Bound evidence size and contents before upload
+        shell: pwsh
+        run: >-
+          python sdk_v2/java/evaluation/stage_artifacts.py
+          --source sdk_v2/java/evaluation/build/results
+          --destination sdk_v2/java/evaluation/build/artifacts
+      - name: Preserve bounded failure metadata without workstation paths
+        if: failure()
+        shell: pwsh
+        run: >-
+          python sdk_v2/java/evaluation/stage_artifacts.py
+          --source sdk_v2/java/evaluation/build/results
+          --destination sdk_v2/java/evaluation/build/failure-artifacts --failure
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: success()
+        with:
+          name: java-asr-${{ matrix.id }}
+          path: sdk_v2/java/evaluation/build/artifacts/*
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 6
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: java-asr-failure-${{ matrix.id }}
+          path: sdk_v2/java/evaluation/build/failure-artifacts/failure.json
+          retention-days: 7
+          if-no-files-found: warn
+          compression-level: 6
+      # No Actions cache: no license-unreviewed models, runtimes or corpus archives.
