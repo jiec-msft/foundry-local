@@ -1,0 +1,99 @@
+name: Java SDK ASR evaluation (gated preparation)
+run-name: Java ASR ${{ inputs.lane }} ${{ inputs.sdk_sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      sdk_sha:
+        description: Immutable SDK commit approved by coordinator
+        type: string
+        required: true
+      lane:
+        description: At most two full matrices; then only fixed failed lanes
+        type: choice
+        options: [full-matrix, windows-x64, windows-arm64, linux-x64, linux-arm64, macos-arm64]
+        required: true
+      fix_sha:
+        description: Concrete reviewed fix commit for a failed-lane dispatch
+        type: string
+      fix_reason:
+        description: Failure and concrete fix (required for a single lane)
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: java-asr-evaluation-budget
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    if: >-
+      github.repository == 'jiec-msft/foundry-local' &&
+      github.actor == 'jiec-msft' &&
+      github.ref == 'refs/heads/mason/java-asr-evaluation'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.gate.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Read this workflow's complete run history for conservative budget counting
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p sdk_v2/java/evaluation/build
+          gh api --paginate --slurp \
+            "repos/jiec-msft/foundry-local/actions/workflows/java-sdk-evaluation.yml/runs?per_page=100" \
+            > sdk_v2/java/evaluation/build/workflow-runs.json
+      - name: Require fixed SDK, local Windows evidence and explicit dispatch authorization
+        id: gate
+        env:
+          SDK_SHA: ${{ inputs.sdk_sha }}
+          LANE: ${{ inputs.lane }}
+          FIX_SHA: ${{ inputs.fix_sha }}
+          FIX_REASON: ${{ inputs.fix_reason }}
+        run: >-
+          python3 sdk_v2/java/evaluation/ci.py guard
+          --history sdk_v2/java/evaluation/build/workflow-runs.json
+          --output "$GITHUB_OUTPUT"
+
+  model:
+    needs: authorize
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.authorize.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Fixed-SDK integration gate (intentionally blocked pending handoff)
+        shell: pwsh
+        env:
+          TARGET: ${{ matrix.id }}
+        run: python sdk_v2/java/evaluation/ci.py integration --target "$env:TARGET"
+      # Resume here only after binding the fixed SDK and reviewed public dependency
+      # hashes. Must identify actual host/JVM/native, explicitly prepare/download,
+      # transcribe ALL ten WAVs, run paced streaming, cancel and verify cleanup.
+      # The gate never treats compilation or architecture parsing as ASR success.
+      - name: Bound evidence size and contents before upload
+        shell: pwsh
+        run: >-
+          python sdk_v2/java/evaluation/stage_artifacts.py
+          --source sdk_v2/java/evaluation/build/results
+          --destination sdk_v2/java/evaluation/build/artifacts
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: java-asr-${{ matrix.id }}
+          path: sdk_v2/java/evaluation/build/artifacts/*
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 6
+      # No Actions cache: no license-unreviewed models, runtimes or corpus archives.

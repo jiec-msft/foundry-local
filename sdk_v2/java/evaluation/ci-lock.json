@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "enabled": false,
+  "repository": "jiec-msft/foundry-local",
+  "owner": "jiec-msft",
+  "allowed_ref": "refs/heads/mason/java-asr-evaluation",
+  "sdk_git_sha": null,
+  "local_windows_evidence": null,
+  "dispatch_authorized": false,
+  "integration_adapter_ready": false,
+  "model": null,
+  "dependency_license_review_complete": false,
+  "maximum_full_matrices": 2,
+  "max_parallel": 2,
+  "job_timeout_minutes": 20,
+  "artifact_retention_days": 7,
+  "artifact_run_limit_bytes": 50000000,
+  "cache_enabled": false,
+  "cache_limit_bytes": 9999999999
+}

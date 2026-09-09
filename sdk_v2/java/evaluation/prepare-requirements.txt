@@ -1,0 +1,6 @@
+# Preparation only: the actual Windows x64 CPython 3.11 wheel hashes.
+# Not required to score or consume the committed WAVs. Install with --require-hashes.
+soundfile==0.13.1 --hash=sha256:1e70a05a0626524a69e9f0f4dd2ec174b4e9567f4d8b6c11d38b5c289be36ee9
+numpy==2.2.6 --hash=sha256:e8213002e427c69c45a52bbd94163084025f533a55a59d6f9c5b820774ef3303
+cffi==1.17.1 --hash=sha256:caaf0640ef5f5517f49bc275eca1406b0ffa6aa184892812030f04c2abf589a0
+pycparser==2.22 --hash=sha256:c3702b6d3dd8c7abc1afa565d7e63d53a1d0bd86cdc24edd75470f4de499cfcc

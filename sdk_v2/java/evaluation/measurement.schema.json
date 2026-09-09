@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Foundry Local Java public ASR smoke measurement v1",
+  "description": "Actual paced inference evidence, not example output. Cross-field timing, exact fixture membership and architecture agreement are enforced by scorer.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "fixture_set_id", "sdk", "environment", "runtime", "model", "readiness", "resources", "lifecycle", "samples"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "fixture_set_id": {"$ref": "#/$defs/nonempty"},
+    "sdk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["git_sha"],
+      "properties": {"git_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}}
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "host_arch", "jvm_arch", "native_arch", "jdk_version", "jdk_vendor"],
+      "properties": {
+        "os": {"enum": ["windows", "linux", "macos"]},
+        "host_arch": {"$ref": "#/$defs/arch"},
+        "jvm_arch": {"$ref": "#/$defs/arch"},
+        "native_arch": {"$ref": "#/$defs/arch"},
+        "jdk_version": {"$ref": "#/$defs/nonempty"},
+        "jdk_vendor": {"$ref": "#/$defs/nonempty"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"os": {"const": "macos"}}},
+          "then": {
+            "properties": {
+              "host_arch": {"const": "arm64"},
+              "jvm_arch": {"const": "arm64"},
+              "native_arch": {"const": "arm64"}
+            }
+          }
+        }
+      ]
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "sha256"],
+      "properties": {
+        "version": {"$ref": "#/$defs/nonempty"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "sha256"],
+      "properties": {
+        "id": {"$ref": "#/$defs/nonempty"},
+        "version": {"$ref": "#/$defs/nonempty"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "elapsed_ms", "cold_start"],
+      "properties": {
+        "status": {"const": "ready"},
+        "elapsed_ms": {"$ref": "#/$defs/milliseconds"},
+        "cold_start": {"type": "boolean"}
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["peak_rss_bytes", "rss_method", "runtime_download_bytes", "model_download_bytes", "runtime_install_bytes", "model_install_bytes"],
+      "properties": {
+        "peak_rss_bytes": {"type": "integer", "minimum": 1},
+        "rss_method": {"$ref": "#/$defs/nonempty"},
+        "runtime_download_bytes": {"$ref": "#/$defs/bytes"},
+        "model_download_bytes": {"$ref": "#/$defs/bytes"},
+        "runtime_install_bytes": {"type": "integer", "minimum": 1},
+        "model_install_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["native_loaded", "cancel_verified", "cleanup_verified"],
+      "properties": {
+        "native_loaded": {"type": "boolean", "const": true},
+        "cancel_verified": {"type": "boolean", "const": true},
+        "cleanup_verified": {"type": "boolean", "const": true}
+      }
+    },
+    "samples": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Exactly one entry for every frozen manifest ID; no missing or duplicate utterances.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "hypothesis_raw", "timing"],
+        "properties": {
+          "id": {"$ref": "#/$defs/nonempty"},
+          "hypothesis_raw": {"type": "string"},
+          "timing": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mode", "audio_duration_ms", "feed_started_ms", "first_nonempty_ms", "input_closed_ms", "finalized_ms", "inference_wall_ms", "chunk_duration_ms"],
+            "properties": {
+              "mode": {"const": "paced"},
+              "audio_duration_ms": {"$ref": "#/$defs/positive_ms"},
+              "feed_started_ms": {"$ref": "#/$defs/milliseconds"},
+              "first_nonempty_ms": {
+                "anyOf": [{"$ref": "#/$defs/milliseconds"}, {"type": "null"}],
+                "description": "First nonempty hypothesis callback, including final callback if no partials. Null only when no nonempty output was observed."
+              },
+              "input_closed_ms": {"$ref": "#/$defs/milliseconds"},
+              "finalized_ms": {"$ref": "#/$defs/milliseconds"},
+              "inference_wall_ms": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "finalized_ms - feed_started_ms; includes pacing and excludes readiness."
+              },
+              "chunk_duration_ms": {"type": "number", "exclusiveMinimum": 0, "maximum": 100}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nonempty": {"type": "string", "minLength": 1, "pattern": "\\S"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "arch": {"enum": ["x64", "arm64"]},
+    "milliseconds": {"type": "number", "minimum": 0},
+    "positive_ms": {"type": "number", "exclusiveMinimum": 0},
+    "bytes": {"type": "integer", "minimum": 0}
+  }
+}

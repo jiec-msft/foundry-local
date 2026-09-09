@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "status": "READY_FOR_SDK",
+  "baseline_sha": "afdb275c0b79f77dbbd1c901de235bfea124441d",
+  "sdk_git_sha": null,
+  "java_minimum_version": 17,
+  "java_binding": "JNA",
+  "runtime": {
+    "package": "Microsoft.AI.Foundry.Local.Runtime",
+    "version": "2.0.1",
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.ai.foundry.local.runtime/2.0.1/microsoft.ai.foundry.local.runtime.2.0.1.nupkg",
+    "sha256": "f509b4509f3fd452bfe9dd0721feabc407689b9d105da71c63e5a2f87bd9f03c",
+    "header_member": "build/native/include/foundry_local/foundry_local_c.h",
+    "header_sha256": "f220cf707a309b805b3d3a6b2084208927cf17151e68da5d991b9af16a44ae6f",
+    "api_version": 1,
+    "header_rule": "Use this package's own header, not public main or the v2.0.1 tag (API_VERSION=2).",
+    "provenance_status": "Coordinator-supplied package/header hashes; evaluator has not downloaded runtime.",
+    "dependencies": [
+      {
+        "package": "Microsoft.ML.OnnxRuntime",
+        "version": "1.28.0",
+        "url": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.28.0/microsoft.ml.onnxruntime.1.28.0.nupkg",
+        "sha256": null
+      },
+      {
+        "package": "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
+        "version": "0.15.2",
+        "url": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntimegenai.foundry/0.15.2/microsoft.ml.onnxruntimegenai.foundry.0.15.2.nupkg",
+        "sha256": null
+      }
+    ]
+  },
+  "cli": {
+    "stdout": "JSON lines; event schema and launcher require fixed-SDK handoff",
+    "common_options": ["--runtime-dir", "--cache-dir"],
+    "commands": [
+      "identify",
+      "prepare --explicit-download",
+      "transcribe --wav PATH",
+      "stream --wav PATH",
+      "stream --pcm PATH",
+      "stream --wav PATH --cancel-after-ms MILLISECONDS"
+    ],
+    "stream_pacing": "PCM chunks scheduled against a monotonic clock at source sample rate"
+  },
+  "supported_targets": [
+    {"id": "windows-x64", "runner": "windows-2022", "os": "windows", "arch": "x64", "rid": "win-x64"},
+    {"id": "windows-arm64", "runner": "windows-11-arm", "os": "windows", "arch": "arm64", "rid": "win-arm64"},
+    {"id": "linux-x64", "runner": "ubuntu-24.04", "os": "linux", "arch": "x64", "rid": "linux-x64"},
+    {"id": "linux-arm64", "runner": "ubuntu-24.04-arm", "os": "linux", "arch": "arm64", "rid": "linux-arm64"},
+    {"id": "macos-arm64", "runner": "macos-15", "os": "macos", "arch": "arm64", "rid": "osx-arm64"}
+  ],
+  "unsupported_targets": ["macos-x64"],
+  "runner_label_source": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
+  "runner_label_review_date": "2026-09-09"
+}
