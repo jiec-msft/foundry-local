@@ -1,16 +1,34 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
-"""Fail-closed CI preparation gates. No SDK adapter is bound in this revision."""
+"""Fail-closed authorization and explicit fixed-SDK integration binding."""
 
 import argparse
 import json
 import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
 FULL_MATRIX_PREFIX = "Java ASR full-matrix "
+RUNNERS = {
+    "windows-x64": "windows-2022", "windows-arm64": "windows-11-arm",
+    "linux-x64": "ubuntu-24.04", "linux-arm64": "ubuntu-24.04-arm", "macos-arm64": "macos-15",
+}
+
+
+def integration_command(args):
+    command = [sys.executable, str(ROOT / "integration.py"), "--java", str(args.java),
+               "--jar", str(args.jar), "--runtime-dir", str(args.runtime_dir),
+               "--cache-dir", str(args.cache_dir), "--output", str(args.output),
+               "--target", args.target, "--timeout-seconds", "840"]
+    if args.prepare != args.accept_model_license:
+        raise ValueError("Model preparation requires both --prepare and --accept-model-license")
+    if args.prepare:
+        command += ["--prepare", "--accept-model-license"]
+    return command
 
 
 def validate_dispatch(lock, contract, context, previous_full_matrices):
@@ -38,6 +56,11 @@ def validate_dispatch(lock, contract, context, previous_full_matrices):
         if not re.fullmatch(r"[0-9a-f]{64}", dependency["sha256"] or ""):
             raise ValueError(f"Missing pinned public dependency hash: {dependency['package']}")
     targets = {target["id"] for target in contract["supported_targets"]}
+    if {t["id"]: t["runner"] for t in contract["supported_targets"]} != RUNNERS:
+        raise ValueError("Only the five pinned standard public runners are permitted")
+    if (lock["maximum_full_matrices"] != 2 or lock["max_parallel"] != 2
+            or lock["job_timeout_minutes"] != 20 or lock["cache_enabled"] is not False):
+        raise ValueError("Evaluation resource budget must remain fixed")
     lane = context["lane"]
     if lane == "full-matrix":
         if previous_full_matrices >= lock["maximum_full_matrices"]:
@@ -57,6 +80,28 @@ def previous_full_count(pages, current_run_id):
     })
 
 
+def validate_failed_lane(history, context):
+    if context["lane"] == "full-matrix":
+        return
+    run_id = os.environ.get("FAILED_RUN_ID", "")
+    if not re.fullmatch(r"[0-9]+", run_id):
+        raise ValueError("Single-lane dispatch requires a prior failed run ID")
+    runs = [r for page in history for r in page["workflow_runs"] if str(r["id"]) == run_id]
+    if len(runs) != 1 or runs[0].get("head_branch") != context["ref"].removeprefix("refs/heads/"):
+        raise ValueError("Failed run must belong to this workflow and allowlisted branch")
+    jobs_pages = json.loads(subprocess.check_output(
+        ["gh", "api", "--paginate", "--slurp",
+         f"repos/{context['repository']}/actions/runs/{run_id}/jobs?per_page=100"], text=True))
+    jobs = [j for page in jobs_pages for j in page["jobs"]]
+    if not any(j["name"] == "model-" + context["lane"] and j["conclusion"] in ("failure", "timed_out")
+               for j in jobs):
+        raise ValueError("Only a proven failed lane may be retried")
+    subprocess.run(["git", "merge-base", "--is-ancestor", context["fix_sha"], "HEAD"], check=True)
+    subprocess.run(["git", "merge-base", "--is-ancestor", runs[0]["head_sha"], context["fix_sha"]], check=True)
+    if context["fix_sha"] == runs[0]["head_sha"]:
+        raise ValueError("Fix commit must follow the failed run")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -64,13 +109,14 @@ def main():
     guard.add_argument("--history", type=Path, required=True)
     guard.add_argument("--output", type=Path, required=True)
     integration = subparsers.add_parser("integration")
-    integration.add_argument("--target", required=True)
+    integration.add_argument("--target", required=True, choices=RUNNERS)
+    for option in ("java", "jar", "runtime-dir", "cache-dir", "output"):
+        integration.add_argument("--" + option, required=True, type=Path)
+    integration.add_argument("--prepare", action="store_true")
+    integration.add_argument("--accept-model-license", action="store_true")
     args = parser.parse_args()
     if args.command == "integration":
-        raise SystemExit(
-            "BLOCKED: immutable SDK launcher/JSONL event schema and explicit preparation adapter "
-            "must be integrated after local compute permission. No model has been run."
-        )
+        raise SystemExit(subprocess.call(integration_command(args), env={**os.environ, "ORT_TELEMETRY_DISABLED": "1"}))
     lock = json.loads((ROOT / "ci-lock.json").read_text(encoding="utf-8"))
     contract = json.loads((ROOT / "sdk-contract.json").read_text(encoding="utf-8"))
     context = {
@@ -85,6 +131,7 @@ def main():
     }
     history = json.loads(args.history.read_text(encoding="utf-8"))
     matrix = validate_dispatch(lock, contract, context, previous_full_count(history, os.environ["GITHUB_RUN_ID"]))
+    validate_failed_lane(history, context)
     with args.output.open("a", encoding="utf-8") as output:
         output.write("matrix=" + json.dumps({"include": matrix}, separators=(",", ":")) + "\n")
 

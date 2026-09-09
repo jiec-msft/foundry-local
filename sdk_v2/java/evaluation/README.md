@@ -1,10 +1,17 @@
 # Public Java ASR smoke evaluation
 
-**Preparation only: READY_FOR_SDK. No Java model run or hosted ASR result is claimed.**
+**Windows Java 17 evaluated; hosted CI remains disabled and undispatched.**
 This directory is independently authored evaluation code, not an SDK implementation.
 The ten fixed English utterances are a smoke set, **never a product quality claim**.
 They are not representative of languages, accents, microphones, conversational speech,
 long recordings, accessibility needs, or the population of users.
+
+The immutable SDK source is `06bf21e65f9a48518a0422558c5bbac42b2fd618`.
+The evaluator's own bounded Windows run covered all ten batch WAVs, all ten
+20 ms paced streams, and early cancellation with explicit inference cleanup.
+Both modes produced **8 edits / 151 reference words (5.298% WER)**. See
+[LOCAL_EVALUATION.md](LOCAL_EVALUATION.md) for exact scope, timing, artifact hashes,
+limitations and the distinction between native execution and report finalization.
 
 ## Frozen public fixtures
 
@@ -105,7 +112,10 @@ Do not average per-utterance WERs. Report pooled corpus, `dev-clean`, and
 and hypothesis. Zero-reference WER is undefined (`null`), not zero. A missing
 hypothesis is invalid evidence; an actual empty hypothesis is scored as deletions.
 
-The input contract is `measurement.schema.json`. After authorized actual SDK execution:
+The current input contract is `measurement.schema.json` version 2. It preserves
+unknown metrics as `{"value": null, "reason": "..."}` rather than inventing
+zeros or equating installed size with network transfer. The scorer still accepts
+version 1 for its independent golden fixtures. After authorized actual SDK execution:
 
 ```powershell
 python sdk_v2\java\evaluation\scorer.py `
@@ -119,16 +129,18 @@ and the complete raw measurement in the scored report. Never substitute fixture
 references, example transcripts, unit-test synthetic data, or generated timing
 values for recognition evidence.
 
-Measurement semantics for the future fixed-SDK adapter:
+Measurement semantics for `integration.py`:
 
 - Record SDK commit, runtime version and package SHA256, exact model ID/version/hash,
   JDK version/vendor, OS, and actual host/JVM/native architecture, not just runner labels.
-- Readiness is the elapsed monotonic duration of explicit runtime/model preparation
-  until inference-ready, with cold/warm state explicit. It is not first-token latency.
+- End-to-end readiness is unknown because the CLI does not expose a single
+  observation covering it. Actual model-load durations are retained separately;
+  existing-cache state is recorded. Neither is first-token latency.
 - Feed 20 ms PCM chunks against monotonic deadlines at the original 16000 Hz rate;
   record the actual chunk duration (up to 100 ms is accepted, never a whole-file
   burst disguised as streaming). Timing timestamps are milliseconds from one
-  process-local monotonic origin. `feed_started_ms` is first submitted audio;
+  request-local monotonic origin from `result.timing`. Never mix these with
+  `speech.elapsedMillis` (a different CLI origin). `feed_started_ms` is first admitted audio;
   `input_closed_ms` is end-of-input submission; `finalized_ms` is final-result receipt.
 - First-nonempty latency is first nonempty hypothesis time minus first audio submission;
   if no nonempty output exists, preserve `null`, never zero. Finalization latency is
@@ -146,10 +158,13 @@ Measurement semantics for the future fixed-SDK adapter:
   and released sessions/queues/files with no surviving child process. Missing evidence
   is an incomplete run, not a success-shaped default.
 
-The fixed-SDK adapter must execute `transcribe --wav` for all ten committed WAVs,
-then paced streaming of the same ten, plus a cancellation/cleanup probe. Preserve
-batch hypotheses in raw JSONL and score the final paced hypotheses in the primary
-measurement. The adapter/event mapping is deliberately not guessed in this revision.
+The adapter executes `transcribe --wav` and then paced `stream --wav` for each of
+the ten committed WAVs, followed by a cancellation/cleanup probe. Both modes are
+scored independently against the same frozen references. TOKEN text is delta
+evidence, not revisable partial text; the final aggregate result is authoritative.
+`requestClosed`, `modelUnloaded`, `managerClosed`, zero child-process count and
+exit 0 are required for inference. The SDK's identify/prepare early-return paths
+emit no `managerClosed`; their process exit is recorded without claiming that marker.
 
 ## Fixed SDK dependency and ABI
 
@@ -159,23 +174,25 @@ measurement. The adapter/event mapping is deliberately not guessed in this revis
 The runtime package and its own C header are SHA256-pinned in that file.
 **Use the package's own API_VERSION=1 header.** Public main and the `v2.0.1`
 tag header have API_VERSION=2 and must not be used with that packaged binary.
-This preparation has not downloaded or executed the runtime.
+Actual runtime identity, native file hashes and model content hashes were verified
+before the evaluator's own Windows run.
 
-Expected CLI: `identify`, `prepare --explicit-download`, `transcribe --wav`,
+Bound CLI: `identify`, `prepare --explicit-download --accept-model-license`, `transcribe --wav`,
 `stream --wav` (paced PCM) or `--pcm`, optional `--cancel-after-ms`, with
-explicit `--runtime-dir`/`--cache-dir` and JSON-lines stdout. An immutable SDK
-commit or artifact, launcher, JSONL event schema, dependency/model/JDK download
-pins and license review are still required. SDK API/build changes belong to the
-coordinator/SDK worker, not this directory.
+explicit `--runtime-dir`/`--cache-dir`/`--app-data-dir` and JSON-lines stdout.
+The actual SDK [API](../API.md), [event schema](../cli.schema.json), model lock
+and bundled runtime/native locks are authoritative. SDK API/build changes belong
+to the coordinator/SDK worker, not this directory.
 
-## Hosted CI is staged, not enabled
+## Hosted CI is bound, not enabled
 
 The two `java-sdk*.yml` workflows are scoped to evaluation paths. The small
 unit workflow is offline on a standard `ubuntu-24.04` host; model evaluation is
 **workflow_dispatch only**, owner/repository/ref guarded, and fails closed against
-`ci-lock.json`. Its integration entry point intentionally exits nonzero until the
-immutable SDK has been bound. Neither that gate nor parsing native headers is
-evidence that an ASR model ran. The fork Actions setting remains disabled.
+`ci-lock.json`. Its integration entry point invokes the real bounded evaluator
+after explicit pinned preparation. Neither that gate nor parsing native headers
+is evidence that an ASR model ran on a hosted target. The fork Actions setting
+and dispatch authorization remain disabled.
 
 Standard labels were rechecked against the public
 [GitHub-hosted runners reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
@@ -188,6 +205,19 @@ on 2026-09-09:
 | Linux x64 | ubuntu-24.04 | x64 |
 | Linux ARM64 | ubuntu-24.04-arm | arm64 |
 | macOS ARM64 | macos-15 | arm64 |
+
+All five lanes have explicitly pinned **native JDK 17** downloads. Temurin 17
+has no Windows ARM64 artifact, but Microsoft publishes a native Windows ARM64
+17.0.20.1 archive; its public checksum and size are pinned in `ci-tools-lock.json`.
+No emulation or silent native-test skip substitutes for that lane.
+
+One standard Windows x64 job builds the canonical SDK with pinned Temurin 17
+and Maven, then shares only the 62,370-byte, exact-hash-verified thin JAR.
+The original artifact contains CRLF resources and Maven properties; a Linux
+rebuild would change its bytes. The canonical Windows checkout therefore uses
+explicit CRLF text handling rather than modifying SDK source/resources or
+accepting a different JAR hash. Every native lane rechecks Java17 bytecode and
+JAR/JNA hashes. Hosted rebuild reproducibility itself remains unexecuted.
 
 `platform_checks.py` compares actual host (including emulated-process cases),
 JVM properties and individual PE/ELF/Mach-O native machine headers. The adapter
@@ -212,8 +242,9 @@ uploaded. Any later cache requires license review and a total below 10 GB.
 Do not enable inherited workflows. Later enablement must allowlist only the approved
 Java workflow(s); prerelease publication and actual CI require separate permission.
 
-**Next dependency:** coordinator supplies the immutable SDK SHA/artifact and JSONL
-contract; integrate only in owned evaluation/workflow paths, then obtain the local
-compute slot. Only after real local Windows success, complete public download hashes,
-and dispatch permission may the coordinator authorize Actions enablement and a bounded
-matrix. No runtime, model, CI, prerelease, issue, or PR action is implied by this preparation.
+**Next dependency:** coordinator reviews the bound workflow and local evidence,
+resolves explicit model-download license acceptance, safely registers the workflow
+on the default branch, allowlists only the intended workflow(s), and authorizes
+dispatch. `workflow_dispatch` is not available merely because a workflow exists on
+this feature branch: GitHub requires its registration on the default branch.
+No registration, enablement, dispatch, prerelease, issue or PR is performed here.

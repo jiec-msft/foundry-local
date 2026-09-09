@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Foundry Local Java public ASR smoke measurement v1",
+  "title": "Foundry Local Java public ASR smoke measurement v2",
   "description": "Actual paced inference evidence, not example output. Cross-field timing, exact fixture membership and architecture agreement are enforced by scorer.py.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "fixture_set_id", "sdk", "environment", "runtime", "model", "readiness", "resources", "lifecycle", "samples"],
+  "required": ["schema_version", "fixture_set_id", "sdk", "environment", "runtime", "model", "readiness", "resources", "lifecycle", "samples", "batch_samples", "cancellation", "provenance"],
   "properties": {
-    "schema_version": {"type": "integer", "const": 1},
+    "schema_version": {"type": "integer", "const": 2},
     "fixture_set_id": {"$ref": "#/$defs/nonempty"},
     "sdk": {
       "type": "object",
@@ -61,24 +61,30 @@
     "readiness": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "elapsed_ms", "cold_start"],
+      "required": ["status", "elapsed_ms", "cold_start", "model_load_ms"],
       "properties": {
         "status": {"const": "ready"},
-        "elapsed_ms": {"$ref": "#/$defs/milliseconds"},
-        "cold_start": {"type": "boolean"}
+        "elapsed_ms": {"anyOf": [{"$ref": "#/$defs/milliseconds"}, {"$ref": "#/$defs/unknown"}]},
+        "model_load_ms": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/milliseconds"}},
+        "cold_start": {
+          "type": "boolean",
+          "description": "Initial model-cache cold state, not JVM reuse. Every CLI operation starts a fresh JVM."
+        }
       }
     },
     "resources": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["peak_rss_bytes", "rss_method", "runtime_download_bytes", "model_download_bytes", "runtime_install_bytes", "model_install_bytes"],
+      "required": ["peak_rss_bytes", "rss_method", "runtime_download_bytes", "model_download_bytes", "runtime_install_bytes", "model_install_bytes", "artifact_download_bytes", "sdk_artifact_bytes"],
       "properties": {
-        "peak_rss_bytes": {"type": "integer", "minimum": 1},
+        "peak_rss_bytes": {"anyOf": [{"type": "integer", "minimum": 1}, {"$ref": "#/$defs/unknown"}]},
         "rss_method": {"$ref": "#/$defs/nonempty"},
-        "runtime_download_bytes": {"$ref": "#/$defs/bytes"},
-        "model_download_bytes": {"$ref": "#/$defs/bytes"},
-        "runtime_install_bytes": {"type": "integer", "minimum": 1},
-        "model_install_bytes": {"type": "integer", "minimum": 1}
+        "runtime_download_bytes": {"$ref": "#/$defs/observed_bytes"},
+        "model_download_bytes": {"$ref": "#/$defs/observed_bytes"},
+        "artifact_download_bytes": {"$ref": "#/$defs/observed_bytes"},
+        "sdk_artifact_bytes": {"$ref": "#/$defs/bytes"},
+        "runtime_install_bytes": {"anyOf": [{"type": "integer", "minimum": 1}, {"$ref": "#/$defs/unknown"}]},
+        "model_install_bytes": {"anyOf": [{"type": "integer", "minimum": 1}, {"$ref": "#/$defs/unknown"}]}
       }
     },
     "lifecycle": {
@@ -107,7 +113,7 @@
             "additionalProperties": false,
             "required": ["mode", "audio_duration_ms", "feed_started_ms", "first_nonempty_ms", "input_closed_ms", "finalized_ms", "inference_wall_ms", "chunk_duration_ms"],
             "properties": {
-              "mode": {"const": "paced"},
+              "mode": {"enum": ["paced", "batch"]},
               "audio_duration_ms": {"$ref": "#/$defs/positive_ms"},
               "feed_started_ms": {"$ref": "#/$defs/milliseconds"},
               "first_nonempty_ms": {
@@ -126,6 +132,31 @@
           }
         }
       }
+    },
+    "batch_samples": {"$ref": "#/properties/samples"},
+    "cancellation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["verified", "cancellation_requested_ms", "acknowledged_ms", "acknowledgment_latency_ms", "natural_input_closed_ms", "submitted_bytes", "cleanup_verified"],
+      "properties": {
+        "verified": {"const": true},
+        "cancellation_requested_ms": {"$ref": "#/$defs/milliseconds"},
+        "acknowledged_ms": {"$ref": "#/$defs/milliseconds"},
+        "acknowledgment_latency_ms": {"$ref": "#/$defs/milliseconds"},
+        "natural_input_closed_ms": {"type": "null"},
+        "submitted_bytes": {"$ref": "#/$defs/bytes"},
+        "cleanup_verified": {"const": true}
+      }
+    },
+    "provenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sdk_jar_sha256", "jna_sha256", "native_sha256", "timing_origin", "coverage"],
+      "properties": {
+        "sdk_jar_sha256": {"$ref": "#/$defs/sha256"},
+        "jna_sha256": {"$ref": "#/$defs/sha256"},
+        "native_sha256": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/sha256"}},
+        "timing_origin": {"$ref": "#/$defs/nonempty"},
+        "coverage": {"$ref": "#/$defs/nonempty"}
+      }
     }
   },
   "$defs": {
@@ -134,6 +165,12 @@
     "arch": {"enum": ["x64", "arm64"]},
     "milliseconds": {"type": "number", "minimum": 0},
     "positive_ms": {"type": "number", "exclusiveMinimum": 0},
-    "bytes": {"type": "integer", "minimum": 0}
+    "bytes": {"type": "integer", "minimum": 0},
+    "unknown": {
+      "type": "object", "additionalProperties": false,
+      "required": ["value", "reason"],
+      "properties": {"value": {"type": "null"}, "reason": {"$ref": "#/$defs/nonempty"}}
+    },
+    "observed_bytes": {"anyOf": [{"$ref": "#/$defs/bytes"}, {"$ref": "#/$defs/unknown"}]}
   }
 }

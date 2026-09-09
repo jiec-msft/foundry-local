@@ -5,6 +5,7 @@
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import zipfile
 from pathlib import Path
@@ -13,6 +14,33 @@ from pathlib import Path
 # Five lanes x 9 MB leaves 5 MB for a separately reviewed prerelease JAR/report.
 LANE_LIMIT_BYTES = 9_000_000
 ALLOWED_NAMES = {"measurement.json", "report.json", "events.jsonl", "platform.json", "sdk.jar"}
+
+
+def stage_failure(source, destination):
+    """Keep failed-lane evidence without exporting raw error messages or local paths."""
+    if destination.exists():
+        raise ValueError("Failure artifact destination must be fresh")
+    processes = []
+    for path in sorted((source / "local").glob("*.process.json")):
+        process = json.loads(path.read_text(encoding="utf-8"))
+        processes.append({
+            "command": process["command"], "exit_code": process["exit_code"], "timed_out": process["timed_out"],
+            "error_events": [{"error_type": event["errorType"], "code": event["code"]}
+                             for event in process["events"] if event["event"] == "error"],
+        })
+    failure = {
+        "status": "incomplete",
+        "reason": "Integration or preparation failed; this is not a complete ASR measurement.",
+        "processes": processes,
+        "measurement_retained_locally": (source / "measurement.json").exists(),
+        "raw_error_messages": "Not exported because native diagnostics can contain machine-specific paths.",
+    }
+    data = (json.dumps(failure, indent=2) + "\n").encode("utf-8")
+    if len(data) > LANE_LIMIT_BYTES or re.search(rb"(?<![A-Za-z])[A-Za-z]:[\\/]|/(?:Users|home|runner)/", data):
+        raise ValueError("Failure evidence exceeds privacy or size limits")
+    destination.mkdir(parents=True)
+    (destination / "failure.json").write_bytes(data)
+    return len(data)
 
 
 def stage(source, destination, limit=LANE_LIMIT_BYTES):
@@ -26,6 +54,10 @@ def stage(source, destination, limit=LANE_LIMIT_BYTES):
         if path.is_symlink() or not path.is_file():
             raise ValueError(f"Expected regular artifact file: {path}")
         total += path.stat().st_size
+        if path.suffix in (".json", ".jsonl"):
+            content = path.read_text(encoding="utf-8")
+            if re.search(r"(?<![A-Za-z])[A-Za-z]:[\\/]|/(?:Users|home|runner)/", content):
+                raise ValueError(f"Machine-specific path in public evidence: {path.name}")
         if path.suffix == ".jar":
             with zipfile.ZipFile(path) as jar:
                 prohibited = (".dll", ".so", ".dylib", ".onnx", ".nupkg", ".tar.gz")
@@ -53,8 +85,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--destination", type=Path, required=True)
+    parser.add_argument("--failure", action="store_true")
     args = parser.parse_args()
-    print(f"Staged {stage(args.source, args.destination)} bytes")
+    operation = stage_failure if args.failure else stage
+    print(f"Staged {operation(args.source, args.destination)} bytes")
 
 
 if __name__ == "__main__":

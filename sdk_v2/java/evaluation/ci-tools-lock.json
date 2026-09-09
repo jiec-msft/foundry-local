@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "provenance": "GitHub release asset SHA256 digests and Microsoft public SHA256 sidecar/HEAD metadata queried 2026-09-09; Maven SHA512 from SDK build.ps1",
+  "jdk": {
+    "windows-x64": {
+      "version": "17.0.20.1+1", "major": 17,
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_x64_windows_hotspot_17.0.20.1_1.zip",
+      "bytes": 190817615, "sha256": "e53a79c3c3d86865bd7e787903884331068e71321714ffd44f145785affc7cb0"
+    },
+    "windows-arm64": {
+      "version": "17.0.20.1", "major": 17,
+      "vendor": "Microsoft",
+      "reason": "Temurin17 has no Windows ARM64 asset, but Microsoft publishes a native JDK17 ARM64 archive. Public metadata verified; inference unexecuted, no emulation.",
+      "source": "https://learn.microsoft.com/en-us/java/openjdk/download",
+      "checksum_url": "https://download.visualstudio.microsoft.com/download/pr/a9672056-0a4d-425d-8488-f481ee56319c/869a13bfe47827fc8870a43c4a75a00d/microsoft-jdk-17.0.20.1-windows-aarch64.zip.sha256sum.txt",
+      "url": "https://download.visualstudio.microsoft.com/download/pr/a9672056-0a4d-425d-8488-f481ee56319c/d160759122688dcfccad9cce06001adf/microsoft-jdk-17.0.20.1-windows-aarch64.zip",
+      "bytes": 182542846, "sha256": "6872e702181fe88773a80bc3684281c111091e29e7f190ac5af06b0315f8b849"
+    },
+    "linux-x64": {
+      "version": "17.0.20.1+1", "major": 17,
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_x64_linux_hotspot_17.0.20.1_1.tar.gz",
+      "bytes": 193252603, "sha256": "3808d1d15e3ec6bd5b84057fb5d84c33d8a1536a258146bcea2e603fc726e08e"
+    },
+    "linux-arm64": {
+      "version": "17.0.20.1+1", "major": 17,
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.20.1_1.tar.gz",
+      "bytes": 191962709, "sha256": "457b57af8f9c93ec39080bb8c764f559dc8c89a6da1a39d718a400b7890d3e41"
+    },
+    "macos-arm64": {
+      "version": "17.0.20.1+1", "major": 17,
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.20.1_1.tar.gz",
+      "bytes": 185851019, "sha256": "196d13ba5f10414bef7f6a05a9b3f00edacb18ebacef2b99485db9e2ee18f0e8"
+    }
+  },
+  "maven": {
+    "version": "3.9.9",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.9/apache-maven-3.9.9-bin.zip",
+    "sha512": "8beac8d11ef208f1e2a8df0682b9448a9a363d2ad13ca74af43705549e72e74c9378823bf689287801cbbfc2f6ea9596201d19ccacfdfb682ee8a2ff4c4418ba"
+  }
+}

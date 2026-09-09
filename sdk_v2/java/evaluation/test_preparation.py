@@ -14,7 +14,7 @@ from pathlib import Path
 from ci import previous_full_count, validate_dispatch
 from platform_checks import assert_identities, assert_supported, native_identity, normalize_arch
 from prepare_fixtures import flac_streaminfo
-from stage_artifacts import stage
+from stage_artifacts import stage, stage_failure
 
 
 ROOT = Path(__file__).resolve().parent
@@ -133,7 +133,7 @@ class GateTests(unittest.TestCase):
     def test_prepared_revision_is_fail_closed(self):
         self.assertFalse(self.lock["enabled"])
         self.assertFalse(self.lock["dispatch_authorized"])
-        self.assertIsNone(self.contract["sdk_git_sha"])
+        self.assertEqual("06bf21e65f9a48518a0422558c5bbac42b2fd618", self.contract["sdk_git_sha"])
         with self.assertRaisesRegex(ValueError, "BLOCKED"):
             validate_dispatch(self.lock, self.contract, self.context, 0)
 
@@ -205,6 +205,21 @@ class ArtifactTests(unittest.TestCase):
         (self.source / "report.json").unlink()
         with self.assertRaisesRegex(ValueError, "required"):
             stage(self.source, self.root / "missing")
+
+    def test_public_urls_allowed_but_machine_paths_rejected(self):
+        (self.source / "report.json").write_text('{"source":"https://www.openslr.org/12"}', encoding="utf-8")
+        stage(self.source, self.root / "public")
+        (self.source / "report.json").write_text('{"path":"C:\\\\Users\\\\example"}', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Machine-specific"):
+            stage(self.source, self.root / "machine")
+
+    def test_missing_native_run_is_incomplete_not_successful(self):
+        destination = self.root / "failure"
+        stage_failure(self.root / "no-run", destination)
+        failure = json.loads((destination / "failure.json").read_text())
+        self.assertEqual("incomplete", failure["status"])
+        self.assertFalse(failure["measurement_retained_locally"])
+        self.assertEqual([], failure["processes"])
 
 
 if __name__ == "__main__":

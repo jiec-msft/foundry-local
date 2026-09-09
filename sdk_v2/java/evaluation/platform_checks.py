@@ -55,17 +55,17 @@ def jvm_identity(java="java"):
     )
     properties = {}
     for line in (result.stdout + result.stderr).splitlines():
-        match = re.match(r"\s*(os\.arch|java\.version|java\.vendor)\s*=\s*(.+?)\s*$", line)
+        match = re.match(r"\s*(os\.arch|java\.runtime\.version|java\.vendor)\s*=\s*(.+?)\s*$", line)
         if match:
             properties[match[1]] = match[2]
-    if set(properties) != {"os.arch", "java.version", "java.vendor"}:
+    if set(properties) != {"os.arch", "java.runtime.version", "java.vendor"}:
         raise ValueError("Cannot determine actual JVM architecture/version/vendor")
-    major = int(properties["java.version"].split(".")[0])
+    major = int(properties["java.runtime.version"].split(".")[0].split("+")[0])
     if major < 17:
-        raise ValueError(f"Java 17+ required; got {properties['java.version']}")
+        raise ValueError(f"Java 17+ required; got {properties['java.runtime.version']}")
     return {
         "jvm_arch": normalize_arch(properties["os.arch"]),
-        "jdk_version": properties["java.version"],
+        "jdk_version": properties["java.runtime.version"],
         "jdk_vendor": properties["java.vendor"],
     }
 

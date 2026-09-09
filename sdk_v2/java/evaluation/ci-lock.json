@@ -4,17 +4,42 @@
   "repository": "jiec-msft/foundry-local",
   "owner": "jiec-msft",
   "allowed_ref": "refs/heads/mason/java-asr-evaluation",
-  "sdk_git_sha": null,
-  "local_windows_evidence": null,
+  "sdk_git_sha": "06bf21e65f9a48518a0422558c5bbac42b2fd618",
+  "local_windows_evidence": {
+    "sdk_git_sha": "06bf21e65f9a48518a0422558c5bbac42b2fd618",
+    "sha256": "696a7b0a21b8c978ac7332c78d531f1a15c10ec450138a0a143ff2da569bcc66",
+    "report": "build/windows-java17-run2/report.json",
+    "measurement": "build/windows-java17-run2/measurement.json",
+    "measurement_sha256": "72d11c3dcf6558f61f08db60c03171b2d394d21e0464ae9eae0b4607cc243255",
+    "scope": "Windows x64 Java17: identify, ten batch WAVs, ten paced 20ms streams, cancellation; 22 JVMs exited zero; inference lifecycle verified",
+    "bundle_bytes": 203245,
+    "model_transfer_bytes": null,
+    "end_to_end_readiness": null
+  },
   "dispatch_authorized": false,
-  "integration_adapter_ready": false,
-  "model": null,
+  "ci_lane_status": {
+    "windows-x64": "not_run",
+    "windows-arm64": "not_run",
+    "linux-x64": "not_run",
+    "linux-arm64": "not_run",
+    "macos-arm64": "not_run"
+  },
+  "integration_adapter_ready": true,
+  "model": {
+    "id": "nemotron-3.5-asr-streaming-0.6b-generic-cpu:3",
+    "sha256": "483ce0b37c44b952a369de4257161df7ca42c8621109f20222ad1a9126f55001",
+    "hash_kind": "installed-file-manifest; not archive or download bytes",
+    "source_lock": "../model-lock.json",
+    "redistribution_authorized": false,
+    "license_review": "Pending: catalog MIT versus NVIDIA OpenMDW-1.1 card and NVIDIA Open Model License notices; see SDK README"
+  },
   "dependency_license_review_complete": false,
   "maximum_full_matrices": 2,
   "max_parallel": 2,
   "job_timeout_minutes": 20,
   "artifact_retention_days": 7,
   "artifact_run_limit_bytes": 50000000,
+  "artifact_lane_limit_bytes": 9000000,
   "cache_enabled": false,
   "cache_limit_bytes": 9999999999
 }

@@ -110,6 +110,16 @@ def number(value, path, positive=False, integer=False):
     return value
 
 
+def observed_number(value, path, version, **constraints):
+    if version == 2 and isinstance(value, dict):
+        object_fields(value, ("value", "reason"), path)
+        if value["value"] is not None:
+            raise ValueError(f"{path}: unknown observation value must be null")
+        text(value["reason"], f"{path}.reason")
+        return None
+    return number(value, path, **constraints)
+
+
 def hash_value(value, length, path):
     if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{" + str(length) + "}", value) is None:
         raise ValueError(f"{path}: expected lowercase {length}-hex digest")
@@ -138,14 +148,16 @@ def manifest_samples(manifest):
     return by_id
 
 
-def validate_measurement(manifest, measurement):
+def validate_measurement(manifest, measurement, sample_field="samples"):
     expected = manifest_samples(manifest)
+    version = measurement.get("schema_version") if isinstance(measurement, dict) else None
+    additional = ("batch_samples", "cancellation", "provenance") if version == 2 else ()
     object_fields(measurement, (
         "schema_version", "fixture_set_id", "sdk", "environment", "runtime", "model",
         "readiness", "resources", "lifecycle", "samples",
-    ), "measurement")
-    if type(measurement["schema_version"]) is not int or measurement["schema_version"] != 1:
-        raise ValueError("Measurement schema_version must be 1")
+    ) + additional, "measurement")
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError("Measurement schema_version must be 1 or 2")
     if measurement["fixture_set_id"] != manifest["fixture_set_id"]:
         raise ValueError("Measurement fixture_set_id differs from manifest")
     object_fields(measurement["sdk"], ("git_sha",), "sdk")
@@ -157,8 +169,8 @@ def validate_measurement(manifest, measurement):
     assert_supported(environment["os"], environment["host_arch"])
     if environment["host_arch"] != environment["jvm_arch"] or environment["host_arch"] != environment["native_arch"]:
         raise ValueError("Host/JVM/native architectures must match")
-    version = text(environment["jdk_version"], "jdk_version")
-    if not re.match(r"^\d+(?:\.|$|[+-])", version) or int(re.split(r"[.+-]", version)[0]) < 17:
+    jdk_version = text(environment["jdk_version"], "jdk_version")
+    if not re.match(r"^\d+(?:\.|$|[+-])", jdk_version) or int(re.split(r"[.+-]", jdk_version)[0]) < 17:
         raise ValueError("Measured JVM must be Java 17+")
     text(environment["jdk_vendor"], "jdk_vendor")
     for name, fields in (("runtime", ("version", "sha256")), ("model", ("id", "version", "sha256"))):
@@ -168,25 +180,55 @@ def validate_measurement(manifest, measurement):
             if field != "sha256":
                 text(measurement[name][field], f"{name}.{field}")
     readiness = measurement["readiness"]
-    object_fields(readiness, ("status", "elapsed_ms", "cold_start"), "readiness")
+    object_fields(readiness, ("status", "elapsed_ms", "cold_start") + (("model_load_ms",) if version == 2 else ()), "readiness")
     if readiness["status"] != "ready" or type(readiness["cold_start"]) is not bool:
         raise ValueError("Readiness requires ready status and explicit boolean cold_start")
-    number(readiness["elapsed_ms"], "readiness.elapsed_ms")
+    observed_number(readiness["elapsed_ms"], "readiness.elapsed_ms", version)
+    if version == 2:
+        if not isinstance(readiness["model_load_ms"], list) or not readiness["model_load_ms"]:
+            raise ValueError("Observed model-load durations are required")
+        for duration in readiness["model_load_ms"]:
+            number(duration, "readiness.model_load_ms")
     resources = measurement["resources"]
     object_fields(resources, (
         "peak_rss_bytes", "rss_method", "runtime_download_bytes", "model_download_bytes",
         "runtime_install_bytes", "model_install_bytes",
-    ), "resources")
+    ) + (("artifact_download_bytes", "sdk_artifact_bytes") if version == 2 else ()), "resources")
     text(resources["rss_method"], "resources.rss_method")
     for key in resources:
         if key != "rss_method":
-            number(resources[key], f"resources.{key}", integer=True, positive=key in (
+            observed_number(resources[key], f"resources.{key}", version, integer=True, positive=key in (
                 "peak_rss_bytes", "runtime_install_bytes", "model_install_bytes"
             ))
     object_fields(measurement["lifecycle"], ("native_loaded", "cancel_verified", "cleanup_verified"), "lifecycle")
     if any(value is not True for value in measurement["lifecycle"].values()):
         raise ValueError("Actual native load, cancellation and cleanup evidence are all required")
-    samples = measurement["samples"]
+    if version == 2:
+        cancellation = measurement["cancellation"]
+        object_fields(cancellation, ("verified", "cancellation_requested_ms", "acknowledged_ms",
+                                     "acknowledgment_latency_ms", "natural_input_closed_ms",
+                                     "submitted_bytes", "cleanup_verified"), "cancellation")
+        if cancellation["verified"] is not True or cancellation["cleanup_verified"] is not True:
+            raise ValueError("Actual cancellation and cleanup observations required")
+        if cancellation["natural_input_closed_ms"] is not None:
+            raise ValueError("Early cancellation is not natural input close")
+        for key in ("cancellation_requested_ms", "acknowledged_ms", "acknowledgment_latency_ms", "submitted_bytes"):
+            number(cancellation[key], f"cancellation.{key}")
+        if not math.isclose(cancellation["acknowledgment_latency_ms"],
+                            cancellation["acknowledged_ms"] - cancellation["cancellation_requested_ms"], abs_tol=0.001):
+            raise ValueError("Cancellation acknowledgment latency differs from observed timestamps")
+        provenance = measurement["provenance"]
+        object_fields(provenance, ("sdk_jar_sha256", "jna_sha256", "native_sha256", "timing_origin", "coverage"), "provenance")
+        for key in ("sdk_jar_sha256", "jna_sha256"):
+            hash_value(provenance[key], 64, key)
+        if not isinstance(provenance["native_sha256"], dict) or not provenance["native_sha256"]:
+            raise ValueError("Actual native file hashes required")
+        for name, digest in provenance["native_sha256"].items():
+            text(name, "native filename")
+            hash_value(digest, 64, name)
+        text(provenance["timing_origin"], "timing_origin")
+        text(provenance["coverage"], "coverage")
+    samples = measurement[sample_field]
     if not isinstance(samples, list):
         raise ValueError("Measurement samples must be an array")
     seen = set()
@@ -203,8 +245,9 @@ def validate_measurement(manifest, measurement):
             "mode", "audio_duration_ms", "feed_started_ms", "first_nonempty_ms", "input_closed_ms",
             "finalized_ms", "inference_wall_ms", "chunk_duration_ms",
         ), f"{identifier}.timing")
-        if timing["mode"] != "paced":
-            raise ValueError("Primary smoke measurement requires paced streaming")
+        expected_mode = "paced" if sample_field == "samples" else "batch"
+        if timing["mode"] != expected_mode:
+            raise ValueError(f"{sample_field}: expected {expected_mode} timing mode")
         for field, value in timing.items():
             if field == "mode" or (field == "first_nonempty_ms" and value is None):
                 continue
@@ -217,7 +260,7 @@ def validate_measurement(manifest, measurement):
             raise ValueError(f"{identifier}: measured duration differs from fixed WAV")
         if not start <= closed <= final:
             raise ValueError(f"{identifier}: timestamps must satisfy feed <= input-close <= final")
-        if chunk > min(duration, 100) or closed - start + chunk + 1 < duration:
+        if expected_mode == "paced" and (chunk > min(duration, 100) or closed - start + chunk + 1 < duration):
             raise ValueError(f"{identifier}: feeding was not paced at the source audio duration")
         if not math.isclose(timing["inference_wall_ms"], final - start, abs_tol=0.001, rel_tol=0):
             raise ValueError(f"{identifier}: inference_wall_ms must cover first feed through final result")
@@ -231,9 +274,9 @@ def validate_measurement(manifest, measurement):
     return expected
 
 
-def score_measurement(manifest, measurement):
-    expected = validate_measurement(manifest, measurement)
-    measured = {sample["id"]: sample for sample in measurement["samples"]}
+def score_samples(manifest, measurement, sample_field):
+    expected = validate_measurement(manifest, measurement, sample_field)
+    measured = {sample["id"]: sample for sample in measurement[sample_field]}
     scores = []
     for identifier, reference in expected.items():
         sample = measured[identifier]
@@ -245,19 +288,26 @@ def score_measurement(manifest, measurement):
             **score_pair(reference["reference_raw"], sample["hypothesis_raw"]),
             "first_nonempty_latency_ms": None if first is None else first - timing["feed_started_ms"],
             "finalization_latency_ms": timing["finalized_ms"] - timing["input_closed_ms"],
-            "paced_rtf": timing["inference_wall_ms"] / timing["audio_duration_ms"],
+            "paced_rtf" if sample_field == "samples" else "batch_rtf": timing["inference_wall_ms"] / timing["audio_duration_ms"],
         })
-    return {
-        "schema_version": 1,
+    return {"corpus": aggregate(scores),
+            "subsets": {subset: aggregate([sample for sample in scores if sample["subset"] == subset]) for subset in SUBSETS},
+            "samples": scores}
+
+
+def score_measurement(manifest, measurement):
+    report = {
+        "schema_version": measurement["schema_version"],
         "fixture_set_id": manifest["fixture_set_id"],
         "evaluation_kind": "public-english-smoke-not-product-quality",
         "normalization_version": NORMALIZATION_VERSION,
         "unicode_database_version": unicodedata.unidata_version,
-        "corpus": aggregate(scores),
-        "subsets": {subset: aggregate([sample for sample in scores if sample["subset"] == subset]) for subset in SUBSETS},
-        "samples": scores,
+        **score_samples(manifest, measurement, "samples"),
         "measurement_raw": copy.deepcopy(measurement),
     }
+    if measurement["schema_version"] == 2:
+        report["batch"] = score_samples(manifest, measurement, "batch_samples")
+    return report
 
 
 def unique_object(pairs):
