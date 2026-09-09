@@ -5,9 +5,9 @@ five-platform/JVM compatibility certification.
 
 **Source-specific historical evidence, not current-artifact qualification.**
 Subsequent review found Windows non-UTF8 JSONL and a cancel/result-publication
-race in 06bf. Candidate `d0946a0764d9cfa4b3d684940d6d5c66165427b8` addresses those
-defects but its native qualification is pending. None of the results or artifact
-hashes below qualifies that candidate's 64,000-byte JAR
+race in 06bf. Qualified source `d0946a0764d9cfa4b3d684940d6d5c66165427b8` addresses
+those defects and now has its own [fresh evaluator result](D094_EVALUATION.md).
+None of the results or artifact hashes below is relabeled as that source's 64,000-byte JAR
 (`bf644d3127afff912683731094821a8f6a751f003c284a9c15ddceaecebe0863`).
 The retained 06bf observations and their original hashes are unchanged.
 

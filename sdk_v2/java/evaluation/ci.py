@@ -20,10 +20,12 @@ RUNNERS = {
 
 
 def integration_command(args):
+    if not 1 <= args.timeout_seconds <= 840:
+        raise ValueError("Integration timeout must be 1..840 seconds within the granted slot")
     command = [sys.executable, str(ROOT / "integration.py"), "--java", str(args.java),
                "--jar", str(args.jar), "--runtime-dir", str(args.runtime_dir),
                "--cache-dir", str(args.cache_dir), "--output", str(args.output),
-               "--target", args.target, "--timeout-seconds", "840"]
+               "--target", args.target, "--timeout-seconds", str(args.timeout_seconds)]
     if args.prepare != args.accept_model_license:
         raise ValueError("Model preparation requires both --prepare and --accept-model-license")
     if args.prepare:
@@ -120,6 +122,7 @@ def main():
         integration.add_argument("--" + option, required=True, type=Path)
     integration.add_argument("--prepare", action="store_true")
     integration.add_argument("--accept-model-license", action="store_true")
+    integration.add_argument("--timeout-seconds", type=int, default=840)
     args = parser.parse_args()
     if args.command == "integration":
         require_current_source(json.loads((ROOT / "ci-lock.json").read_text(encoding="utf-8")))

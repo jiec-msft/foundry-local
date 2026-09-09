@@ -3,6 +3,7 @@
 
 import argparse
 import ctypes
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -19,9 +20,11 @@ from scorer import load_json, score_measurement
 
 ROOT = Path(__file__).resolve().parent
 SDK = ROOT.parent
-SDK_SHA = "06bf21e65f9a48518a0422558c5bbac42b2fd618"
-JAR_SHA = "d9620c6a40199f1bc8359c91dad4d07e3dc5b3f959a2ad6b3029e8053a45bbcf"
+SDK_SHA = "d0946a0764d9cfa4b3d684940d6d5c66165427b8"
+JAR_SHA = "bf644d3127afff912683731094821a8f6a751f003c284a9c15ddceaecebe0863"
+JAR_BYTES = 64000
 JNA_SHA = "b3a9408e7c51e08ef0e3bfcc08f443f6ec0f6191ba8cd7c18d53d2b22e5bdbc0"
+JNA_BYTES = 2002589
 NATIVE_LOCK = SDK / "src" / "main" / "resources" / "com" / "microsoft" / "foundry" / "local"
 
 
@@ -60,8 +63,10 @@ def verify_model(cache, lock):
 
 
 def verify_artifacts(jar, runtime, target, java):
-    if sha256(jar) != JAR_SHA or sha256(jar.parent / "lib" / "jna-5.17.0.jar") != JNA_SHA:
-        raise ValueError("Immutable SDK/JNA artifact hash mismatch")
+    jna = jar.parent / "lib" / "jna-5.17.0.jar"
+    if (jar.stat().st_size != JAR_BYTES or jna.stat().st_size != JNA_BYTES
+            or sha256(jar) != JAR_SHA or sha256(jna) != JNA_SHA):
+        raise ValueError("Immutable SDK/JNA artifact size or hash mismatch")
     with zipfile.ZipFile(jar) as archive:
         versions = {struct.unpack(">H", archive.read(name)[6:8])[0] for name in archive.namelist() if name.endswith(".class")}
         if versions != {61}:
@@ -243,7 +248,13 @@ def main():
     if args.output.exists():
         raise ValueError("Use a fresh output directory to preserve prior evidence")
     args.output.mkdir(parents=True)
-    deadline = time.monotonic() + args.timeout_seconds
+    started = time.monotonic()
+    started_utc = datetime.now(timezone.utc).isoformat()
+    deadline = started + args.timeout_seconds
+    save(args.output / "run-summary.json", {
+        "sdk_source_sha": SDK_SHA, "sdk_jar_sha256": JAR_SHA, "started_utc": started_utc,
+        "finished_utc": None, "outcome": "running",
+    })
     runs = []
     try:
         manifest = load_json(ROOT / "manifest.json")
@@ -328,11 +339,21 @@ def main():
         save(args.output / "platform.json", environment)
         save(args.output / "partial.json", {"status": "completed", "completed_commands": [r["command"] for r in runs],
                                           "active_processes": [], "compute_slot": "RELEASED"})
+        save(args.output / "run-summary.json", {
+            "sdk_source_sha": SDK_SHA, "sdk_jar_sha256": JAR_SHA, "started_utc": started_utc,
+            "finished_utc": datetime.now(timezone.utc).isoformat(), "outcome": "completed",
+            "wall_seconds": time.monotonic() - started, "process_count": len(runs), "active_processes": [],
+        })
         print(json.dumps({"status": "completed", "corpus": report["corpus"], "batch": report["batch"]["corpus"]}))
     except (ValueError, RuntimeError, OSError, TimeoutError, KeyboardInterrupt) as error:
         save(args.output / "partial.json", {"status": "failed", "error_type": type(error).__name__, "message": str(error),
                                           "completed_commands": [run["command"] for run in runs],
                                           "active_processes": [], "compute_slot": "RELEASED"})
+        save(args.output / "run-summary.json", {
+            "sdk_source_sha": SDK_SHA, "sdk_jar_sha256": JAR_SHA, "started_utc": started_utc,
+            "finished_utc": datetime.now(timezone.utc).isoformat(), "outcome": "failed",
+            "wall_seconds": time.monotonic() - started, "process_count": len(runs), "active_processes": [],
+        })
         raise
 
 

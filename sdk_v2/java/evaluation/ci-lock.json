@@ -4,9 +4,34 @@
   "repository": "jiec-msft/foundry-local",
   "owner": "jiec-msft",
   "allowed_ref": "refs/heads/mason/java-asr-evaluation",
-  "sdk_git_sha": "06bf21e65f9a48518a0422558c5bbac42b2fd618",
-  "source_pin_refresh_required": true,
+  "sdk_git_sha": "d0946a0764d9cfa4b3d684940d6d5c66165427b8",
+  "source_pin_refresh_required": false,
   "local_windows_evidence": {
+    "sdk_git_sha": "d0946a0764d9cfa4b3d684940d6d5c66165427b8",
+    "sha256": "840d0cececf14f93f6db7251cb85480e0ec774b407164121304a6c50cd8b6eb5",
+    "report": "build/windows-java17-d094-run1/report.json",
+    "measurement": "build/windows-java17-d094-run1/measurement.json",
+    "measurement_sha256": "c413c9cd44b4807f8f29677b8ae96122eadb3dfef5e9afc752fa89852d43dc93",
+    "scope": "Fresh Windows x64 Java17 evaluation from immutable source/hash-scoped copies: identify,10 batch WAVs,10 paced20ms streams,cancel;22 native CLI processes exited0 with inference cleanup.",
+    "qualification": "Artifact-specific d094 evidence;955 strictUTF8/schema-validated CLI events;8/151 edits in each mode.",
+    "bundle_bytes": 203272,
+    "bundle_bytes_with_inventory": 203830,
+    "model_transfer_bytes": null,
+    "end_to_end_readiness": null,
+    "unknown_metric_reasons": {
+      "model_transfer_bytes": "Native download API exposes percentages, not transfer bytes; cached catalog can still network.",
+      "end_to_end_readiness": "No single end-to-end readiness observation; actual model-load durations are recorded separately."
+    },
+    "canonical_rebuild": {
+      "offline": true,
+      "bytes": 64000,
+      "sha256": "bf644d3127afff912683731094821a8f6a751f003c284a9c15ddceaecebe0863",
+      "matches_qualified_copy": true,
+      "tests_skipped": true,
+      "reason": "Reproducibility only; no extra native/model execution."
+    }
+  },
+  "historical_06bf_windows_evidence": {
     "sdk_git_sha": "06bf21e65f9a48518a0422558c5bbac42b2fd618",
     "sha256": "696a7b0a21b8c978ac7332c78d531f1a15c10ec450138a0a143ff2da569bcc66",
     "report": "build/windows-java17-run2/report.json",

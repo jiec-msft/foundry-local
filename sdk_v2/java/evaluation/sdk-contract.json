@@ -1,21 +1,22 @@
 {
   "schema_version": 1,
-  "status": "PENDING_QUALIFIED_SDK_REFRESH",
+  "status": "QUALIFIED_SOURCE_LOCAL_REFRESH_COMPLETE_CI_DISABLED",
   "baseline_sha": "afdb275c0b79f77dbbd1c901de235bfea124441d",
-  "sdk_git_sha": "06bf21e65f9a48518a0422558c5bbac42b2fd618",
-  "pending_sdk_refresh": {
+  "sdk_git_sha": "d0946a0764d9cfa4b3d684940d6d5c66165427b8",
+  "sdk_qualification": {
     "sdk_git_sha": "d0946a0764d9cfa4b3d684940d6d5c66165427b8",
     "sdk_jar_bytes": 64000,
     "sdk_jar_sha256": "bf644d3127afff912683731094821a8f6a751f003c284a9c15ddceaecebe0863",
-    "native_qualification": "pending",
-    "provenance": "Coordinator-supplied public source/artifact tuple; not merged, built or executed by this evaluator.",
-    "reason": "Windows non-UTF8 JSONL and cancel/result-publication race fixes require artifact-specific native qualification.",
-    "activation": "Coordinator integrates the qualified SDK after this evaluation scope is finalized; refresh all active pins and obtain explicit permission for the smallest refreshed local run."
+    "native_qualification": "coordinator_confirmed",
+    "provenance": "Coordinator integrated the qualified public SDK at 3e3affb4c789cebfca44c9fbfe72bd3e6ad055c4.",
+    "reason": "Windows UTF8 JSONL and cancel/result-publication fixes received artifact-specific native qualification.",
+    "local_evaluator_refresh": "Fresh d094 Windows Java17 10WAV+10paced+cancel smoke completed; historical06bf evidence remains separate.",
+    "local_canonical_reproducibility": "Isolated offline Windows Java17/Maven build reproduced the exact64000-byte qualified JAR SHA256 without overwriting or repacking it."
   },
   "sdk_jar": {
     "name": "foundry-local-java-0.1.0-poc.jar",
-    "bytes": 62370,
-    "sha256": "d9620c6a40199f1bc8359c91dad4d07e3dc5b3f959a2ad6b3029e8053a45bbcf",
+    "bytes": 64000,
+    "sha256": "bf644d3127afff912683731094821a8f6a751f003c284a9c15ddceaecebe0863",
     "thin": true
   },
   "jna": {

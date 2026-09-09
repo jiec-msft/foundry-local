@@ -134,7 +134,7 @@ class GateTests(unittest.TestCase):
     def test_prepared_revision_is_fail_closed(self):
         self.assertFalse(self.lock["enabled"])
         self.assertFalse(self.lock["dispatch_authorized"])
-        self.assertEqual("06bf21e65f9a48518a0422558c5bbac42b2fd618", self.contract["sdk_git_sha"])
+        self.assertEqual("d0946a0764d9cfa4b3d684940d6d5c66165427b8", self.contract["sdk_git_sha"])
         with self.assertRaisesRegex(ValueError, "BLOCKED"):
             validate_dispatch(self.lock, self.contract, self.context, 0)
 
