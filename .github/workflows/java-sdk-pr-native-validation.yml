@@ -51,8 +51,9 @@ jobs:
       - name: Build the pinned preparation SDK
         id: sdk
         shell: pwsh
+        working-directory: evaluation
         run: >-
-          python evaluation/sdk_v2/java/evaluation/ci_prepare.py --target windows-x64
+          python sdk_v2/java/evaluation/ci_prepare.py --target windows-x64
           --output "$env:GITHUB_OUTPUT" --explicit-download --accept-native-licenses --build-only
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -110,10 +111,11 @@ jobs:
         env:
           TARGET: ${{ matrix.id }}
         shell: pwsh
+        working-directory: evaluation
         run: >-
-          python evaluation/sdk_v2/java/evaluation/ci_prepare.py --target "$env:TARGET"
+          python sdk_v2/java/evaluation/ci_prepare.py --target "$env:TARGET"
           --output "$env:GITHUB_OUTPUT" --explicit-download --accept-native-licenses
-          --sdk-jar artifacts/sdk/foundry-local-java-0.1.0-poc.jar
+          --sdk-jar ../artifacts/sdk/foundry-local-java-0.1.0-poc.jar
       - name: Prepare and verify the pinned ASR model
         env:
           TARGET: ${{ matrix.id }}
@@ -123,10 +125,11 @@ jobs:
           MODEL_CACHE: ${{ steps.prepare.outputs.model_cache }}
           ORT_TELEMETRY_DISABLED: '1'
         shell: pwsh
+        working-directory: evaluation
         run: >-
-          python evaluation/sdk_v2/java/evaluation/integration.py --target "$env:TARGET"
+          python sdk_v2/java/evaluation/integration.py --target "$env:TARGET"
           --java "$env:JAVA" --jar "$env:SDK_JAR" --runtime-dir "$env:RUNTIME"
-          --cache-dir "$env:MODEL_CACHE" --output evaluation/sdk_v2/java/evaluation/build/results
+          --cache-dir "$env:MODEL_CACHE" --output sdk_v2/java/evaluation/build/results
           --prepare --accept-model-license --timeout-seconds 840
       - name: Run the candidate NativeAsrTest
         env:
