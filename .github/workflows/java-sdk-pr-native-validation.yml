@@ -48,6 +48,7 @@ jobs:
           ref: 07e40f066997d326c189f492225bc5a7bb193c0a
           path: evaluation
           persist-credentials: false
+          fetch-depth: 0
       - name: Build the pinned preparation SDK
         id: sdk
         shell: pwsh
@@ -93,6 +94,7 @@ jobs:
           ref: 07e40f066997d326c189f492225bc5a7bb193c0a
           path: evaluation
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: java-asr-preparation-sdk
