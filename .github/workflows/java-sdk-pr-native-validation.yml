@@ -1,0 +1,183 @@
+name: Java SDK PR native validation
+run-name: Java SDK native ${{ inputs.sdk_sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      sdk_ref:
+        description: Branch containing the Java SDK candidate
+        type: string
+        required: true
+      sdk_sha:
+        description: Exact Java SDK candidate commit
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: java-sdk-pr-native-validation
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    if: github.repository == 'jiec-msft/foundry-local' && github.actor == 'jiec-msft'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require an exact commit on the requested fork branch
+        env:
+          SDK_REF: ${{ inputs.sdk_ref }}
+          SDK_SHA: ${{ inputs.sdk_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SDK_REF" =~ ^[A-Za-z0-9._/-]+$ ]]
+          [[ "$SDK_SHA" =~ ^[0-9a-f]{40}$ ]]
+          actual="$(git ls-remote https://github.com/jiec-msft/foundry-local.git "refs/heads/$SDK_REF" | cut -f1)"
+          test "$actual" = "$SDK_SHA"
+
+  build-reference-sdk:
+    needs: authorize
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 07e40f066997d326c189f492225bc5a7bb193c0a
+          path: evaluation
+          persist-credentials: false
+      - name: Build the pinned preparation SDK
+        id: sdk
+        shell: pwsh
+        run: >-
+          python evaluation/sdk_v2/java/evaluation/ci_prepare.py --target windows-x64
+          --output "$env:GITHUB_OUTPUT" --explicit-download --accept-native-licenses --build-only
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: java-asr-preparation-sdk
+          path: ${{ steps.sdk.outputs.jar }}
+          retention-days: 7
+          if-no-files-found: error
+
+  native:
+    name: native-${{ matrix.id }}
+    needs: [authorize, build-reference-sdk]
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - id: windows-x64
+            runner: windows-2022
+          - id: windows-arm64
+            runner: windows-11-arm
+          - id: linux-x64
+            runner: ubuntu-24.04
+          - id: linux-arm64
+            runner: ubuntu-24.04-arm
+          - id: macos-arm64
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.sdk_sha }}
+          path: current
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 07e40f066997d326c189f492225bc5a7bb193c0a
+          path: evaluation
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: java-asr-preparation-sdk
+          path: artifacts/sdk
+      - name: Verify the candidate checkout
+        env:
+          SDK_SHA: ${{ inputs.sdk_sha }}
+        shell: pwsh
+        run: |
+          $actual = git -C current rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $env:SDK_SHA) {
+            throw "Candidate checkout mismatch: $actual"
+          }
+      - name: Prepare pinned JDK and native runtime
+        id: prepare
+        env:
+          TARGET: ${{ matrix.id }}
+        shell: pwsh
+        run: >-
+          python evaluation/sdk_v2/java/evaluation/ci_prepare.py --target "$env:TARGET"
+          --output "$env:GITHUB_OUTPUT" --explicit-download --accept-native-licenses
+          --sdk-jar artifacts/sdk/foundry-local-java-0.1.0-poc.jar
+      - name: Prepare and verify the pinned ASR model
+        env:
+          TARGET: ${{ matrix.id }}
+          JAVA: ${{ steps.prepare.outputs.java }}
+          SDK_JAR: ${{ steps.prepare.outputs.jar }}
+          RUNTIME: ${{ steps.prepare.outputs.runtime }}
+          MODEL_CACHE: ${{ steps.prepare.outputs.model_cache }}
+          ORT_TELEMETRY_DISABLED: '1'
+        shell: pwsh
+        run: >-
+          python evaluation/sdk_v2/java/evaluation/integration.py --target "$env:TARGET"
+          --java "$env:JAVA" --jar "$env:SDK_JAR" --runtime-dir "$env:RUNTIME"
+          --cache-dir "$env:MODEL_CACHE" --output evaluation/sdk_v2/java/evaluation/build/results
+          --prepare --accept-model-license --timeout-seconds 840
+      - name: Run the candidate NativeAsrTest
+        env:
+          JAVA: ${{ steps.prepare.outputs.java }}
+          RUNTIME: ${{ steps.prepare.outputs.runtime }}
+          MODEL_CACHE: ${{ steps.prepare.outputs.model_cache }}
+          ORT_TELEMETRY_DISABLED: '1'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP 'apache-maven-3.9.9-bin.zip'
+          Invoke-WebRequest `
+            'https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.9/apache-maven-3.9.9-bin.zip' `
+            -OutFile $archive
+          $expected = '8beac8d11ef208f1e2a8df0682b9448a9a363d2ad13ca74af43705549e72e74c9378823bf689287801cbbfc2f6ea9596201d19ccacfdfb682ee8a2ff4c4418ba'
+          if ((Get-FileHash $archive -Algorithm SHA512).Hash -ne $expected) {
+            throw 'Maven archive checksum mismatch.'
+          }
+
+          $tools = Join-Path $env:RUNNER_TEMP 'maven-tools'
+          Expand-Archive -LiteralPath $archive -DestinationPath $tools -Force
+          $maven = Join-Path $tools 'apache-maven-3.9.9'
+          $launcher = Get-ChildItem (Join-Path $maven 'boot') -Filter 'plexus-classworlds-*.jar' -File |
+            Select-Object -First 1
+          if (-not $launcher) {
+            throw 'Maven launcher is missing.'
+          }
+
+          $sdk = (Resolve-Path 'current/sdk_v2/java').Path
+          $wav = (Resolve-Path 'evaluation/sdk_v2/java/evaluation/fixtures/84-121123-0003.wav').Path
+          $repository = Join-Path $env:RUNNER_TEMP 'maven-repository'
+          $arguments = @(
+            "-Dmaven.home=$maven",
+            "-Dmaven.multiModuleProjectDirectory=$sdk",
+            "-Dclassworlds.conf=$(Join-Path $maven 'bin/m2.conf')",
+            '-classpath',
+            $launcher.FullName,
+            'org.codehaus.plexus.classworlds.launcher.Launcher',
+            '--batch-mode',
+            '--no-transfer-progress',
+            '-f',
+            (Join-Path $sdk 'pom.xml'),
+            "-Dmaven.repo.local=$repository",
+            '-Dtest=NativeAsrTest',
+            "-Dfoundry.test.runtime=$env:RUNTIME",
+            "-Dfoundry.test.cache=$env:MODEL_CACHE",
+            "-Dfoundry.test.wav=$wav",
+            '-Dfoundry.test.model=nemotron-3.5-asr-streaming-0.6b-generic-cpu:3',
+            'test'
+          )
+          & $env:JAVA @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "Candidate Maven test exited with $LASTEXITCODE."
+          }
